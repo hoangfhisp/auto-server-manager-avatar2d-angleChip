@@ -51,6 +51,7 @@ public class AvatarModAdapter {
         public long upDays = 0;
         public long expiresAtTimestamp = 0;
         public boolean isTargetReached = false;
+        public String targetReachedReason = null;
         public String avatarBase64 = null;
 
         public String toJson(long lastLoginTime) {
@@ -74,7 +75,9 @@ public class AvatarModAdapter {
                     "\",\"sellOreTime\":\"" + sellOreTime + "\",\"currentZone\":" + currentZone +
                     ",\"farmingTime\":\"" + farmingCountdown + "\",\"farmingCountdown\":\"" + farmingCountdown +
                     "\",\"startedAt\":\"" + startStr + "\",\"expiresAt\":\"" + expStr +
-                    "\",\"isTargetReached\":" + isTargetReached + ",\"startedTs\":" + startedTs
+                    "\",\"isTargetReached\":" + isTargetReached + ",\"targetReachedReason\":\""
+                    + (targetReachedReason != null ? targetReachedReason : "") + "\""
+                    + ",\"startedTs\":" + startedTs
                     + ",\"expiresAtTimestamp\":" + expiresAtTimestamp + avatarJson + "}";
         }
     }
@@ -99,6 +102,344 @@ public class AvatarModAdapter {
             this.parentAutoType = parentType;
             this.isSubTask = isSub;
         }
+    }
+
+    public static class ModEventGiftItem {
+        public String itemName;
+        public int currentCount;
+        public int maxCount;
+
+        public ModEventGiftItem(String itemName, int currentCount, int maxCount) {
+            this.itemName = itemName;
+            this.currentCount = currentCount;
+            this.maxCount = maxCount;
+        }
+    }
+
+    public static java.util.List<ModEventGiftItem> getModEventGiftSnapshot() {
+        ClassLoader cl = getClassLoader();
+        if (cl == null)
+            return null;
+        try {
+            Class<?> skGiftCls = cl.loadClass("SkGift");
+            Field gNField = skGiftCls.getDeclaredField("gN");
+            gNField.setAccessible(true);
+            int gN = gNField.getInt(null);
+            if (gN <= 0)
+                return null;
+
+            Field gNameField = skGiftCls.getDeclaredField("gName");
+            gNameField.setAccessible(true);
+            String[] gName = (String[]) gNameField.get(null);
+
+            Field gXField = skGiftCls.getDeclaredField("gX");
+            gXField.setAccessible(true);
+            int[] gX = (int[]) gXField.get(null);
+
+            Field gYField = skGiftCls.getDeclaredField("gY");
+            gYField.setAccessible(true);
+            int[] gY = (int[]) gYField.get(null);
+
+            if (gName == null || gX == null)
+                return null;
+
+            java.util.List<ModEventGiftItem> list = new java.util.ArrayList<ModEventGiftItem>();
+            for (int i = 0; i < gN && i < gName.length; i++) {
+                if (gName[i] != null && !gName[i].trim().isEmpty()) {
+                    int cur = (i < gX.length) ? gX[i] : 0;
+                    int max = (gY != null && i < gY.length) ? gY[i] : 0;
+                    list.add(new ModEventGiftItem(gName[i].trim(), cur, max));
+                }
+            }
+            return list;
+        } catch (Throwable ignored) {
+        }
+        return null;
+    }
+
+    /**
+     * Đọc trực tiếp vật phẩm sự kiện mới nhất từ biến static RAM của SkGift
+     * (SkGift.lastName, SkGift.lastX, SkGift.lastY).
+     * Hoạt động 100% trong Farm ngay cả khi mod dập tắt popup dialog hoàn toàn!
+     */
+    public static ModEventGiftItem getModEventGiftLatestItem() {
+        ClassLoader cl = getClassLoader();
+        if (cl == null)
+            return null;
+        try {
+            Class<?> skGiftCls = cl.loadClass("SkGift");
+            try {
+                Method bootM = skGiftCls.getDeclaredMethod("boot");
+                bootM.setAccessible(true);
+                bootM.invoke(null);
+            } catch (Throwable ignored) {
+            }
+
+            Field nameF = skGiftCls.getDeclaredField("lastName");
+            Field curF = skGiftCls.getDeclaredField("lastX");
+            Field maxF = skGiftCls.getDeclaredField("lastY");
+            nameF.setAccessible(true);
+            curF.setAccessible(true);
+            maxF.setAccessible(true);
+            String name = (String) nameF.get(null);
+            int cur = curF.getInt(null);
+            int max = maxF.getInt(null);
+            if (name != null && !name.trim().isEmpty() && cur > 0) {
+                String cleanName = name.replaceAll("(?i)\\s+từ\\s+.*$", "").trim();
+                return new ModEventGiftItem(cleanName, cur, max);
+            }
+        } catch (Throwable ignored) {
+        }
+        return null;
+    }
+
+    /**
+     * Đọc toàn bộ danh sách các loại vật phẩm sự kiện trong ngày từ mảng static của SkGift
+     * (SkGift.gN, SkGift.gName, SkGift.gX, SkGift.gY).
+     * Cho phép thu thập đầy đủ cả Đường trắng, Bột bí ngô,... cùng một lúc!
+     */
+    public static java.util.List<ModEventGiftItem> getModEventGiftAllItems() {
+        java.util.List<ModEventGiftItem> list = new java.util.ArrayList<ModEventGiftItem>();
+        ClassLoader cl = getClassLoader();
+        if (cl == null)
+            return list;
+        try {
+            Class<?> skGiftCls = cl.loadClass("SkGift");
+            try {
+                Method bootM = skGiftCls.getDeclaredMethod("boot");
+                bootM.setAccessible(true);
+                bootM.invoke(null);
+            } catch (Throwable ignored) {
+            }
+
+            Field gNF = skGiftCls.getDeclaredField("gN");
+            Field gNameF = skGiftCls.getDeclaredField("gName");
+            Field gXF = skGiftCls.getDeclaredField("gX");
+            Field gYF = skGiftCls.getDeclaredField("gY");
+            gNF.setAccessible(true);
+            gNameF.setAccessible(true);
+            gXF.setAccessible(true);
+            gYF.setAccessible(true);
+
+            int gn = gNF.getInt(null);
+            String[] names = (String[]) gNameF.get(null);
+            int[] xs = (int[]) gXF.get(null);
+            int[] ys = (int[]) gYF.get(null);
+
+            if (names != null && xs != null && gn > 0) {
+                for (int i = 0; i < gn && i < names.length; i++) {
+                    String name = names[i];
+                    int cur = xs[i];
+                    int max = (ys != null && i < ys.length) ? ys[i] : 120;
+                    if (name != null && !name.trim().isEmpty() && cur > 0) {
+                        String cleanName = name.replaceAll("(?i)\\s+từ\\s+.*$", "").trim();
+                        list.add(new ModEventGiftItem(cleanName, cur, max));
+                    }
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        if (list.isEmpty()) {
+            ModEventGiftItem latest = getModEventGiftLatestItem();
+            if (latest != null) {
+                list.add(latest);
+            }
+        }
+        return list;
+    }
+
+    public static class ModFarmGiftStatus {
+        public int current;
+        public int max;
+        public String name;
+        public ModFarmGiftStatus(int current, int max, String name) {
+            this.current = current;
+            this.max = max;
+            this.name = name;
+        }
+    }
+
+    /**
+     * Đọc trực tiếp trạng thái quà nông trại từ biến static RAM của SkGift
+     * (SkGift.lastX, SkGift.lastY, SkGift.gX).
+     * Độc lập hoàn toàn, không phụ thuộc vào popup dialog hay tên vật phẩm.
+     */
+    public static ModFarmGiftStatus getModFarmGiftStatus() {
+        ClassLoader cl = getClassLoader();
+        if (cl == null) return null;
+        try {
+            Class<?> skGiftCls = cl.loadClass("SkGift");
+            try {
+                Method bootM = skGiftCls.getDeclaredMethod("boot");
+                bootM.setAccessible(true);
+                bootM.invoke(null);
+            } catch (Throwable ignored) {}
+
+            Field curF = skGiftCls.getDeclaredField("lastX");
+            Field maxF = skGiftCls.getDeclaredField("lastY");
+            Field nameF = skGiftCls.getDeclaredField("lastName");
+            curF.setAccessible(true);
+            maxF.setAccessible(true);
+            nameF.setAccessible(true);
+
+            int lastX = curF.getInt(null);
+            int lastY = maxF.getInt(null);
+            String name = (String) nameF.get(null);
+
+            if (lastX > 0) {
+                return new ModFarmGiftStatus(lastX, lastY > 0 ? lastY : 120, name != null ? name : "farm");
+            }
+
+            // Fallback: Quét mảng gX, gY, gName
+            Field gNF = skGiftCls.getDeclaredField("gN");
+            Field gXF = skGiftCls.getDeclaredField("gX");
+            Field gYF = skGiftCls.getDeclaredField("gY");
+            Field gNameF = skGiftCls.getDeclaredField("gName");
+            gNF.setAccessible(true);
+            gXF.setAccessible(true);
+            gYF.setAccessible(true);
+            gNameF.setAccessible(true);
+
+            int gn = gNF.getInt(null);
+            int[] xs = (int[]) gXF.get(null);
+            int[] ys = (int[]) gYF.get(null);
+            String[] names = (String[]) gNameF.get(null);
+
+            if (xs != null && gn > 0) {
+                int totalX = 0;
+                int maxY = 120;
+                String firstItem = "farm";
+                for (int i = 0; i < gn && i < xs.length; i++) {
+                    if (xs[i] > 0) {
+                        totalX = Math.max(totalX, xs[i]);
+                        if (ys != null && i < ys.length && ys[i] > 0) maxY = ys[i];
+                        if (names != null && i < names.length && names[i] != null) firstItem = names[i];
+                    }
+                }
+                if (totalX > 0) {
+                    return new ModFarmGiftStatus(totalX, maxY, firstItem);
+                }
+            }
+        } catch (Throwable ignored) {}
+        return null;
+    }
+
+    /**
+     * Quét chuỗi thông báo từ hàng đợi chữ bay trên màn hình (Flying Marquee Vector bx.if)
+     * Khi server gửi Packet -8, Bridge.popup sẽ đưa chuỗi vào hàng đợi này.
+     */
+    public static String checkFlyingBannerMessage() {
+        ClassLoader cl = getClassLoader();
+        if (cl == null)
+            return null;
+        ModSchema schema = getCurrentSchema();
+        if (schema == null || schema.dialogContainerClass == null)
+            return null;
+        try {
+            Class<?> containerCls = cl.loadClass(schema.dialogContainerClass);
+            for (Field f : containerCls.getDeclaredFields()) {
+                if (java.lang.reflect.Modifier.isStatic(f.getModifiers()) && java.util.Vector.class.isAssignableFrom(f.getType())) {
+                    f.setAccessible(true);
+                    java.util.Vector<?> vec = (java.util.Vector<?>) f.get(null);
+                    if (vec != null && !vec.isEmpty()) {
+                        for (int i = vec.size() - 1; i >= 0; i--) {
+                            Object item = vec.elementAt(i);
+                            if (item != null) {
+                                for (Field itF : item.getClass().getDeclaredFields()) {
+                                    if (itF.getType().equals(String.class)) {
+                                        itF.setAccessible(true);
+                                        String str = (String) itF.get(item);
+                                        if (str != null && !str.trim().isEmpty() && str.length() > 5) {
+                                            String lower = str.toLowerCase();
+                                            if (lower.contains("nhận") || lower.contains("chúc mừng") || lower.contains("số lượng")) {
+                                                return str.trim();
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return null;
+    }
+
+    public static class EventProgressInfo {
+        public String itemName = "";
+        public int dropQty = 1;
+        public int currentCount = 0;
+        public int maxCount = 0;
+        public String source = "farm";
+        public String rawText = "";
+
+        public EventProgressInfo(String itemName, int dropQty, int currentCount, int maxCount, String source, String rawText) {
+            this.itemName = itemName;
+            this.dropQty = dropQty;
+            this.currentCount = currentCount;
+            this.maxCount = maxCount;
+            this.source = source;
+            this.rawText = rawText;
+        }
+
+        public String toJson() {
+            return "{\"item\":\"" + escapeJson(itemName) + "\",\"drop\":" + dropQty + ",\"current\":" + currentCount + ",\"max\":" + maxCount + ",\"source\":\"" + escapeJson(source) + "\"}";
+        }
+    }
+
+    public static String escapeJson(String s) {
+        if (s == null) return "";
+        return s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r");
+    }
+
+    private static final java.util.regex.Pattern EVENT_POPUP_PATTERN_PROGRESS = java.util.regex.Pattern.compile(
+        "(?i)(?:chúc\\s*mừng\\s+)?(?:bạn\\s+)?(?:đã\\s+)?nhận\\s+(?:được\\s+)?(?:\\+)?(\\d+)?\\s*([^\\r\\n\\./\\(\\)]+?)(?:\\s+từ\\s+([^\\r\\n\\./\\(\\)]+?))?[\\.\\s]*(?:số\\s*lượng[:\\s]*)?\\(?(\\d+)\\s*/\\s*(\\d+)\\)?",
+        java.util.regex.Pattern.CASE_INSENSITIVE | java.util.regex.Pattern.UNICODE_CASE | java.util.regex.Pattern.DOTALL
+    );
+
+    private static final java.util.regex.Pattern EVENT_POPUP_PATTERN_SIMPLE = java.util.regex.Pattern.compile(
+        "(?i)(?:chúc\\s*mừng\\s+)?(?:bạn\\s+)?(?:đã\\s+)?nhận\\s+(?:được\\s+)?(?:\\+)?(\\d+)?\\s*([^\\r\\n\\./\\(\\),]+?)(?:\\s+từ\\s+([^\\r\\n\\./\\(\\)]+?))?(?:[\\.!\\?]|\\s*\\([^\\)]*\\)|$)",
+        java.util.regex.Pattern.CASE_INSENSITIVE | java.util.regex.Pattern.UNICODE_CASE | java.util.regex.Pattern.DOTALL
+    );
+
+    public static EventProgressInfo parseEventText(String text) {
+        if (text == null || text.trim().isEmpty())
+            return null;
+        
+        // 1. Khớp mẫu có số đếm hiện tại và hạn mức hôm nay (cur/max)
+        java.util.regex.Matcher m1 = EVENT_POPUP_PATTERN_PROGRESS.matcher(text);
+        if (m1.find()) {
+            try {
+                String dropStr = m1.group(1);
+                int drop = (dropStr != null && !dropStr.trim().isEmpty()) ? Integer.parseInt(dropStr.trim()) : 1;
+                String item = m1.group(2).replaceAll("\\s+", " ").trim();
+                item = item.replaceAll("(?i)\\s+từ\\s+(?:câu\\s*cá|farm|nông\\s*trại).*$", "").trim();
+                String src = m1.group(3) != null ? m1.group(3).replaceAll("\\s+", " ").trim() : "";
+                int cur = Integer.parseInt(m1.group(4).trim());
+                int max = Integer.parseInt(m1.group(5).trim());
+                return new EventProgressInfo(item, drop, cur, max, src, text);
+            } catch (Throwable ignored) {
+            }
+        }
+
+        // 2. Fallback khớp mẫu nhận quà thông thường không kèm cur/max
+        java.util.regex.Matcher m2 = EVENT_POPUP_PATTERN_SIMPLE.matcher(text);
+        if (m2.find()) {
+            try {
+                String dropStr = m2.group(1);
+                int drop = (dropStr != null && !dropStr.trim().isEmpty()) ? Integer.parseInt(dropStr.trim()) : 1;
+                String item = m2.group(2).replaceAll("\\s+", " ").trim();
+                item = item.replaceAll("(?i)\\s+từ\\s+(?:câu\\s*cá|farm|nông\\s*trại).*$", "").trim();
+                String src = m2.group(3) != null ? m2.group(3).replaceAll("\\s+", " ").trim() : "";
+                if (item != null && !item.isEmpty() && item.length() <= 40) {
+                    return new EventProgressInfo(item, drop, drop, 0, src, text);
+                }
+            } catch (Throwable ignored) {
+            }
+        }
+        return null;
     }
 
     private static long lastLoggedCropRemainingSec = -1L;
@@ -445,6 +786,42 @@ public class AvatarModAdapter {
         } catch (Throwable ignored) {
         }
 
+        return null;
+    }
+
+    public static String checkLatestGameDialog() {
+        // 1. Kiểm tra active dialog trước
+        String active = checkActiveGameDialog();
+        if (active != null && !active.trim().isEmpty()) {
+            return active;
+        }
+
+        // 2. Nếu active dialog vừa bị mod tự đóng (do = null), kiểm tra instance dialog tĩnh trong container
+        ClassLoader cl = getClassLoader();
+        if (cl == null)
+            return null;
+
+        ModSchema schema = getCurrentSchema();
+        String dialogClsName = schema.dialogClass != null ? schema.dialogClass : "s";
+        try {
+            Class<?> containerCls = cl.loadClass(schema.dialogContainerClass);
+            for (Field f : containerCls.getDeclaredFields()) {
+                if (java.lang.reflect.Modifier.isStatic(f.getModifiers())) {
+                    String fTypeName = f.getType().getSimpleName();
+                    if (fTypeName.equals(dialogClsName) || fTypeName.equals("h") || fTypeName.equals("s") || fTypeName.equals("t") || fTypeName.equals("h_0")) {
+                        f.setAccessible(true);
+                        Object dObj = f.get(null);
+                        if (dObj != null) {
+                            String msg = extractDialogText(dObj);
+                            if (msg != null && !msg.trim().isEmpty() && msg.length() > 2) {
+                                return msg.trim();
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Throwable ignored) {
+        }
         return null;
     }
 
@@ -949,6 +1326,7 @@ public class AvatarModAdapter {
             }
             if (upDays <= 0) {
                 stats.expiresAt = "Vĩnh viễn";
+                stats.expiresAtTimestamp = 0;
             } else if (stats.expiresAt == null || stats.expiresAt.isEmpty() || stats.expiresAt.contains("1970")
                     || stats.expiresAt.equals("--")) {
                 long baseTs = (startedTs > 1000000000000L) ? startedTs : System.currentTimeMillis();
@@ -956,11 +1334,23 @@ public class AvatarModAdapter {
                 stats.expiresAt = sdf.format(new Date(baseTs + upDays * 86400000L));
             }
 
-            // Kiểm tra trạng thái hoàn thành mục tiêu trực tiếp từ số liệu Mod trong RAM
+            // Đảm bảo tuyệt đối: Nếu hạn hiển thị là "Vĩnh viễn" thì expiresAtTimestamp phải bằng 0 (KHÔNG BAO GIỜ tính là hết hạn)
+            if (stats.expiresAt != null && (stats.expiresAt.contains("Vĩnh viễn") || stats.expiresAt.equalsIgnoreCase("Vĩnh viễn"))) {
+                stats.expiresAtTimestamp = 0;
+            }
+
+            // Kiểm tra trạng thái hoàn thành mục tiêu trực tiếp từ số liệu Mod trong RAM:
+            // 1. Hoàn thành mục tiêu Up Xu:
+            // CHỈ so sánh với stats.earnedCoins (Xu Up / Xu kiếm thêm được trong phiên), TUYỆT ĐỐI KHÔNG so sánh với stats.coins (Xu Có trong người)!
             if (stats.targetCoins > 0 && stats.earnedCoins >= stats.targetCoins) {
                 stats.isTargetReached = true;
-            } else if (stats.expiresAtTimestamp > 0 && System.currentTimeMillis() >= stats.expiresAtTimestamp) {
+                stats.targetReachedReason = "coins";
+            }
+            // 2. Hết hạn ngày Up:
+            // CHỈ kích hoạt khi có giới hạn ngày (upDays > 0), hạn không phải Vĩnh viễn, expiresAtTimestamp > 0 và thời gian hiện tại đã vượt quá hạn
+            else if (stats.upDays > 0 && stats.expiresAtTimestamp > 0 && (stats.expiresAt != null && !stats.expiresAt.contains("Vĩnh viễn")) && System.currentTimeMillis() >= stats.expiresAtTimestamp) {
                 stats.isTargetReached = true;
+                stats.targetReachedReason = "days";
             }
         } catch (Throwable ignored) {
         }
@@ -2414,9 +2804,13 @@ public class AvatarModAdapter {
 
         try {
             Class<?> aQCls = cl.loadClass(schema.upThueClassName);
-            setStaticField(aQCls, schema.targetCoinsField, int.class, targetCoins);
-            setStaticField(aQCls, schema.upDaysField, long.class, (long) upDays);
-            setStaticField(aQCls, schema.startedTsField, long.class, System.currentTimeMillis());
+            setStaticField(aQCls, schema.targetCoinsField, int.class, Math.max(0, targetCoins));
+            setStaticField(aQCls, schema.upDaysField, long.class, (long) Math.max(0, upDays));
+
+            // Chỉ cập nhật startedTs nếu có cài đặt thời hạn ngày up cụ thể (> 0)
+            if (upDays > 0) {
+                setStaticField(aQCls, schema.startedTsField, long.class, System.currentTimeMillis());
+            }
 
             // Lưu RMS thông qua schema
             try {
@@ -2462,6 +2856,11 @@ public class AvatarModAdapter {
 
             try {
                 Class<?> saveCls = cl.loadClass(schema.upThueSaveRmsClass);
+                // 1. Lưu targetCoins = 0 và upDays = 0 vào RMS file chip_<user>Data.rs
+                Method saveMethod = saveCls.getMethod(schema.upThueSaveRmsMethod);
+                saveMethod.invoke(null);
+
+                // 2. Lưu earnedCoins = 0 và collectedHearts = 0 vào RMS file chip_<user>Coin.rs
                 Method resetMethod = saveCls.getMethod(schema.upThueResetRmsMethod);
                 resetMethod.invoke(null);
             } catch (Throwable ignored) {
@@ -3295,5 +3694,106 @@ public class AvatarModAdapter {
         } catch (Throwable ignored) {
         }
         return defVal;
+    }
+
+    /**
+     * Bắt tin nhắn sự kiện từ Tab chat riêng của Admin / Server
+     * Bao gồm: er.class (ChipMix Full build13) và các bảng băm chat (j, k, p, g trên các bản khác)
+     */
+    public static String checkAdminChatMessage() {
+        ClassLoader cl = getClassLoader();
+        if (cl == null)
+            return null;
+
+        // 1. Kiểm tra qua hệ thống Tab chat er.class (ChipMix build13)
+        try {
+            Class<?> erCls = cl.loadClass("er");
+            for (Field f : erCls.getDeclaredFields()) {
+                if (java.lang.reflect.Modifier.isStatic(f.getModifiers()) && erCls.isAssignableFrom(f.getType())) {
+                    f.setAccessible(true);
+                    Object erInst = f.get(null);
+                    if (erInst != null) {
+                        for (Field tf : erInst.getClass().getDeclaredFields()) {
+                            if (!java.lang.reflect.Modifier.isStatic(tf.getModifiers()) && java.util.Vector.class.isAssignableFrom(tf.getType())) {
+                                tf.setAccessible(true);
+                                java.util.Vector<?> tabs = (java.util.Vector<?>) tf.get(erInst);
+                                if (tabs != null) {
+                                    for (int i = 0; i < tabs.size(); i++) {
+                                        Object tabObj = tabs.elementAt(i);
+                                        if (tabObj != null) {
+                                            String tabName = null;
+                                            java.util.Vector<?> lines = null;
+                                            for (Field tabF : tabObj.getClass().getDeclaredFields()) {
+                                                tabF.setAccessible(true);
+                                                if (tabF.getType().equals(String.class)) {
+                                                    String sVal = (String) tabF.get(tabObj);
+                                                    if (sVal != null && tabName == null) {
+                                                        tabName = sVal;
+                                                    }
+                                                } else if (java.util.Vector.class.isAssignableFrom(tabF.getType())) {
+                                                    lines = (java.util.Vector<?>) tabF.get(tabObj);
+                                                }
+                                            }
+                                            if (tabName != null && ("admin".equalsIgnoreCase(tabName) || "server".equalsIgnoreCase(tabName) || "hệ thống".equalsIgnoreCase(tabName))) {
+                                                if (lines != null && !lines.isEmpty()) {
+                                                    for (int l = lines.size() - 1; l >= Math.max(0, lines.size() - 5); l--) {
+                                                        Object lineObj = lines.elementAt(l);
+                                                        if (lineObj instanceof String) {
+                                                            String lStr = (String) lineObj;
+                                                            if (lStr.contains("Chúc mừng") || lStr.contains("nhận được") || lStr.contains("FISH:")) {
+                                                                return lStr.trim();
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+
+        // 2. Fallback kiểm tra qua các class chat truyền thống (j, k, p, g)
+        String[] chatClasses = new String[] { "j", "k", "p", "g" };
+        for (String cName : chatClasses) {
+            try {
+                Class<?> cls = cl.loadClass(cName);
+                for (Field f : cls.getDeclaredFields()) {
+                    if (java.lang.reflect.Modifier.isStatic(f.getModifiers())) {
+                        f.setAccessible(true);
+                        Object tableObj = f.get(null);
+                        if (tableObj != null) {
+                            for (Method m : tableObj.getClass().getMethods()) {
+                                if (m.getParameterCount() == 1 && m.getParameterTypes()[0].equals(Object.class)) {
+                                    try {
+                                        Object tabObj = m.invoke(tableObj, "admin");
+                                        if (tabObj != null) {
+                                            for (Field tf : tabObj.getClass().getDeclaredFields()) {
+                                                if (tf.getType().equals(String.class)
+                                                        && !java.lang.reflect.Modifier.isStatic(tf.getModifiers())) {
+                                                    tf.setAccessible(true);
+                                                    String s = (String) tf.get(tabObj);
+                                                    if (s != null && (s.contains("Chúc mừng") || s.contains("nhận được") || s.contains("FISH:"))) {
+                                                        return s.trim();
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    } catch (Throwable ignored) {
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (Throwable ignored) {
+            }
+        }
+        return null;
     }
 }
