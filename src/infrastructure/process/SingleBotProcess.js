@@ -48,6 +48,7 @@ class SingleBotProcess extends EventEmitter {
       status: 'idle',
       message: ''
     };
+    this.eventState = null;
     this.workspaceRoot = path.resolve(__dirname, '../../../');
     this._stdoutBuffer = '';
     this._stderrBuffer = '';
@@ -124,8 +125,12 @@ class SingleBotProcess extends EventEmitter {
 
     const hasFeature = (f) => !allowedFeatures || allowedFeatures.includes(f);
 
-    if (this.account.targetCoins && hasFeature('upThue')) args.push(`-Davatar.targetCoins=${this.account.targetCoins}`);
-    if (this.account.upDays && hasFeature('upThue')) args.push(`-Davatar.upDays=${this.account.upDays}`);
+    if (hasFeature('upThue')) {
+      const tc = (this.account.targetCoins !== undefined && this.account.targetCoins !== null) ? parseInt(this.account.targetCoins, 10) : 0;
+      const ud = (this.account.upDays !== undefined && this.account.upDays !== null) ? parseInt(this.account.upDays, 10) : 0;
+      args.push(`-Davatar.targetCoins=${tc}`);
+      args.push(`-Davatar.upDays=${ud}`);
+    }
     if (this.account.pendingReset) {
       args.push('-Davatar.resetOnStart=true');
       this.account.pendingReset = false;
@@ -345,13 +350,25 @@ class SingleBotProcess extends EventEmitter {
           this.processLogOutput(this._stderrBuffer, 'stderr');
           this._stderrBuffer = '';
         }
-        this.emitLog('warn', `⚠️ [${this.account.username}] Tiến trình bot dừng với mã thoát: ${code || signal || '0'}`);
+
+        const isTargetReached = Boolean(this.accountState && (this.accountState.state === 'target_reached' || this.accountState.isCompleted));
         const wasManual = this.isManualStop;
+
+        if (isTargetReached) {
+          this.emitLog('success', `🏆 [${this.account.username}] Tiến trình bot đã dừng sau khi hoàn thành mục tiêu.`);
+        } else if (wasManual) {
+          this.emitLog('info', `⏹️ [${this.account.username}] Tiến trình bot đã dừng.`);
+        } else if (code === 0) {
+          this.emitLog('info', `✅ [${this.account.username}] Tiến trình bot kết thúc (Mã: 0).`);
+        } else {
+          this.emitLog('warn', `⚠️ [${this.account.username}] Tiến trình bot dừng với mã thoát: ${code || signal || '0'}`);
+        }
+
         this.child = null;
         this.startTime = null;
-        this.emit('stopped', { accountId: this.account.id, code, wasManual });
+        this.emit('stopped', { accountId: this.account.id, code, wasManual, isTargetReached });
 
-        if (!wasManual && this.globalConfig.autoRestart) {
+        if (!wasManual && !isTargetReached && this.globalConfig.autoRestart) {
           this.scheduleRestart(javaBin);
         }
       });
@@ -403,16 +420,24 @@ class SingleBotProcess extends EventEmitter {
           message: 'Đã hoàn thành mục tiêu!'
         };
         this.emit('auto-status', { accountId: this.account.id, autoState: this.autoState });
+        const targetMsg = (parsed.accountStatusUpdate && parsed.accountStatusUpdate.message)
+          ? parsed.accountStatusUpdate.message
+          : 'Đã đạt mục tiêu up xu theo cài đặt!';
         this.accountState = {
           state: 'target_reached',
-          message: parsed.accountStatusUpdate && parsed.accountStatusUpdate.message ? parsed.accountStatusUpdate.message : 'Đã đạt yêu cầu up xu theo cài đặt!',
+          message: targetMsg,
           isCompleted: true,
           isError: false,
           isMaintenance: false
         };
         this.emit('account-status', { accountId: this.account.id, state: this.accountState });
         this.emitLog('success', `🏆 [${this.account.username}] 🎉 HOÀN THÀNH MỤC TIÊU: ${this.accountState.message}`);
-        setTimeout(() => this.stop(), 1000);
+        // Chờ tiến trình Java tự động kết thúc (Java gọi System.exit(0) sau 2s). Sau 3.5s dọn dẹp an toàn
+        setTimeout(() => {
+          if (this.child) {
+            this.stop(true);
+          }
+        }, 3500);
       }
 
       if (parsed.autoStatusUpdate) {
@@ -448,6 +473,38 @@ class SingleBotProcess extends EventEmitter {
           ...parsed.statsUpdate
         };
         this.emit('stats', { accountId: this.account.id, stats: this.playerStats });
+      }
+
+      if (parsed.eventStatusUpdate) {
+        const update = parsed.eventStatusUpdate;
+        const source = update.source === 'fish' ? 'fish' : 'farm';
+        const todayStr = new Date().toISOString().slice(0, 10);
+
+        if (!this.eventState || this.eventState.date !== todayStr || update.isNewDay) {
+          const prevFarmMax = this.eventState?.farm?.max || 120;
+          const prevFishMax = this.eventState?.fish?.max || 100;
+          this.eventState = {
+            date: todayStr,
+            farm: { items: {}, total: 0, max: prevFarmMax },
+            fish: { items: {}, total: 0, max: prevFishMax },
+            updatedAt: Date.now()
+          };
+        }
+
+        const group = this.eventState[source];
+        if (group && update.current !== undefined) {
+          const itemKey = update.item ? String(update.item).trim() : source;
+          const currentVal = Number(update.current) || 0;
+          group.items[itemKey] = currentVal;
+          if (update.max && Number(update.max) > 0) {
+            group.max = Number(update.max);
+          }
+          // update.current trực tiếp phản ánh số lượng tích lũy hôm nay (ví dụ 31/120)
+          group.total = currentVal;
+        }
+
+        this.eventState.updatedAt = Date.now();
+        this.emit('event-status', { accountId: this.account.id, eventState: this.eventState });
       }
 
       if (parsed.proxyExpiredReason) {
@@ -494,6 +551,9 @@ class SingleBotProcess extends EventEmitter {
   }
 
   scheduleRestart(javaBin) {
+    if (this.accountState && (this.accountState.state === 'target_reached' || this.accountState.isCompleted)) {
+      return;
+    }
     if (this.accountState && this.accountState.state === 'proxy_expired') {
       this.emitLog('error', `🛑 [${this.account.username}] Dừng tự động kết nối lại vì Proxy đã HẾT HẠN! Vui lòng đổi Proxy trong Quản Lý Proxy.`);
       return;
@@ -538,7 +598,7 @@ class SingleBotProcess extends EventEmitter {
     });
   }
 
-  stop() {
+  stop(preserveTargetState = false) {
     this.isManualStop = true;
     if (this.restartTimer) {
       clearTimeout(this.restartTimer);
@@ -574,7 +634,9 @@ class SingleBotProcess extends EventEmitter {
       this.account.lastAutoType = null;
     }
     this.autoState = { isRunning: false, autoType: null, subTask: null, status: 'stopped', message: '' };
-    this.accountState = { state: 'idle', message: 'Đã dừng', isError: false, isMaintenance: false };
+    if (!preserveTargetState && this.accountState?.state !== 'target_reached') {
+      this.accountState = { state: 'idle', message: 'Đã dừng', isError: false, isMaintenance: false };
+    }
     return true;
   }
 

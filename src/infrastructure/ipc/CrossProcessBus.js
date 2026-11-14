@@ -21,6 +21,7 @@ class CrossProcessBus extends EventEmitter {
     this.lastCommandOffset = 0;
     this.pollInterval = null;
     this.seenEventIds = new Set();
+    this.seenCommandIds = new Set();
     this.maxMemoryLogs = 500;
     this.localLogCache = [];
     this.maxAccountLogs = 1000;
@@ -65,7 +66,19 @@ class CrossProcessBus extends EventEmitter {
           for (const line of lines.slice(-this.maxMemoryLogs)) {
             if (!line.trim()) continue;
             try {
-              this.localLogCache.push(JSON.parse(line));
+              const entry = JSON.parse(line);
+              this.localLogCache.push(entry);
+
+              // Index sẵn vào accountLogsMap để tra cứu O(1) tức thì ngay cả sau khi restart
+              const accKey = entry.accountId ? String(entry.accountId) : (entry.username ? String(entry.username) : null);
+              if (accKey) {
+                if (!this.accountLogsMap.has(accKey)) {
+                  this.accountLogsMap.set(accKey, []);
+                }
+                const aLogs = this.accountLogsMap.get(accKey);
+                aLogs.push(entry);
+                if (aLogs.length > this.maxAccountLogs) aLogs.shift();
+              }
             } catch (e) {}
           }
         }
@@ -168,7 +181,10 @@ class CrossProcessBus extends EventEmitter {
 
     try {
       fs.appendFileSync(this.logsFile, JSON.stringify(formatted) + '\n', 'utf8');
-      this.checkRotateLogsFile();
+      this.logWriteCounter = (this.logWriteCounter || 0) + 1;
+      if (this.logWriteCounter % 50 === 0) {
+        this.checkRotateLogsFile();
+      }
     } catch (e) {}
 
     this.publishEvent('log', formatted);

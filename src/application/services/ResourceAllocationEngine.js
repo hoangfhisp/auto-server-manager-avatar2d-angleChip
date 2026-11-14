@@ -401,6 +401,13 @@ class ResourceAllocationEngine {
   }
 
   async _ensureHealthyProxyForBotInternal(account, otherRunning = []) {
+    const isCustomerRental = Boolean(account.rentalPlan);
+
+    // Tài khoản quản trị nội bộ của Admin chủ đích không gán Proxy -> Giữ nguyên Direct IP máy chủ
+    if (!isCustomerRental && !account.proxyId) {
+      return { changed: false, proxy: null };
+    }
+
     let proxy = account.proxyId ? await this.proxyRepo.findById(account.proxyId) : null;
     const now = Date.now();
     const hasExpiryDate = Boolean(proxy && proxy.expiresAt);
