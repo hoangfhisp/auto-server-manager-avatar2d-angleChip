@@ -2,7 +2,7 @@
 
 # 🌾 Avatar Multi-Bot Manager & Cloud Automation Platform
 
-### Nền tảng tự động hóa game Avatar 2D trên nền tảng đám mây (Cloud), tích hợp hệ sinh thái cày thuê thương mại 24/7, cổng thanh toán VietQR tự động và bảng điều khiển trực quan phong cách Porsche & Apple Minimalist.
+### Enterprise-grade 24/7 background game automation, multi-tenant rental marketplace, cost-optimized proxy lifecycle, and real-time Porsche & Apple minimalist liquid glass web dashboard for Avatar 2D.
 
 [![Node.js](https://img.shields.io/badge/Node.js-18%20|%2020%2B-339933?style=flat-square&logo=node.js&logoColor=white)](https://nodejs.org/)
 [![Database](https://img.shields.io/badge/Database-MySQL%20%7C%20Drizzle%20ORM-00758F?style=flat-square&logo=mysql&logoColor=white)](https://orm.drizzle.team/)
@@ -11,117 +11,151 @@
 [![Platform](https://img.shields.io/badge/Platform-cPanel%20%7C%20Linux%20%7C%20Windows-FF6C37?style=flat-square)](docs/DEPLOYMENT_GUIDE.md)
 [![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](LICENSE)
 
-[Giới thiệu](#-giới-thiệu-tổng-quan) · [Bài toán giải quyết](#-bài-toán-thực-tế--hệ-thống-sinh-ra-để-làm-gì) · [Các chức năng chính](#-các-chức-năng-cốt-lõi--cách-hoạt-động) · [Điểm kỹ thuật nổi bật](#-những-điểm-nổi-bật--đột-phá-kỹ-thuật) · [Kiến trúc hệ thống](#-kiến-trúc-hệ-thống-architecture) · [Cài đặt nhanh](#-hướng-dẫn-khởi-chạy-nhanh-quickstart) · [Tài liệu](#-kho-tài-liệu-kỹ-thuật-docs)
+[Overview](#-overview) · [Core Problems Solved](#-core-problems-solved) · [In-Game Automation Engine](#-in-game-automation-engine) · [Cost-Optimized Proxy Allocation](#-cost-optimized-proxy-allocation-engine) · [Rental SaaS & Billing](#-multi-tenant-rental-marketplace--billing) · [Architecture](#-engine-architecture) · [Quickstart](#-quickstart) · [Documentation Hub](#-documentation-hub) · [License](#-license)
 
 </div>
 
 ---
 
-## 🌟 Giới thiệu Tổng quan
+## 🌟 Overview
 
-**Avatar Multi-Bot Manager** là một giải pháp toàn diện cho phép chạy nền hàng chục đến hàng trăm tài khoản game **Avatar 2D** (Teamobi) đồng thời trên máy chủ đám mây (VPS, Linux Server hoặc cả Hosting cPanel) mà không cần mở giả lập đồ họa nặng nề.
+**Avatar Multi-Bot Manager** is a complete, cloud-native automation platform and commercial rental management system designed for **Avatar 2D** (Teamobi). It orchestrates dozens to hundreds of persistent, headless game accounts running simultaneously on cloud servers, Linux VPS, or standard cPanel shared hosting without graphical display overhead.
 
-Hệ thống kết hợp giữa **Java Headless Launcher** (chạy ngầm MicroEmulator siêu nhẹ chỉ ~45MB RAM/tài khoản) và một **Node.js Supervisor Core** điều phối toàn diện: từ quản lý tiến trình, tự phục hồi khi mất kết nối, phân bổ Proxy chống khóa nick, đến một hệ thống **SaaS cày thuê** có tích hợp nạp tiền tự động qua QR Code ngân hàng.
-
----
-
-## 🎯 Bài toán Thực tế & Hệ thống sinh ra để làm gì?
-
-### 1. Vấn đề của người chơi và người làm dịch vụ cày thuê Avatar
-* **Tốn điện, hại máy:** Treo nick bằng điện thoại hoặc giả lập Android (Nox, LDPlayer) trên máy tính ngốn hàng gigabyte RAM, CPU lúc nào cũng 100%, máy nóng và hao pin liên tục 24/7.
-* **Mất kết nối & Lỡ giờ thu hoạch:** Mạng chập chờn, game server bảo trì khiến bot bị ngắt kết nối mà người dùng không hay biết, dẫn đến chết cây trồng, hỏng trứng, lỡ chuyến câu cá hoặc hết thời gian sự kiện.
-* **Nguy cơ khóa nick do trùng IP:** Đăng nhập quá nhiều tài khoản trên cùng một địa chỉ mạng internet gia đình rất dễ bị hệ thống bảo mật của Teamobi quét và khóa tài khoản hàng loạt.
-* **Khó khăn khi kinh doanh cày thuê:** Người làm dịch vụ phải quản lý danh sách nick bằng Excel hoặc ghi nhớ thủ công, tự canh giờ nạp/hết hạn của khách, cấu hình mod RMS lắt léo và dễ nhầm lẫn.
-
-### 2. Giải pháp của Avatar Multi-Bot Manager
-* **Treo nick Headless siêu tiết kiệm:** Đưa toàn bộ tiến trình lên máy chủ chạy ngầm 100%. 1 VPS 2GB RAM có thể treo mượt mà 30 - 40 nick liên tục.
-* **Tự động hóa hoàn toàn (Auto Farm, Cá, KC, Event):** Tự canh thời gian cây chín chính xác đến từng giây, tự mua mồi, tự giật cần câu cá, tự đào mỏ kim cương, tự nhặt quà sự kiện.
-* **Watchdog tự phục hồi (Self-Healing):** Khi game mất kết nối hoặc máy chủ bảo trì, hệ thống tự động nhận diện và thử kết nối lại thông minh theo thuật toán giãn cách (Exponential Backoff + Jitter), không để nick bị rớt.
-* **Hạ tầng Proxy độc lập:** Mỗi nhóm tài khoản chạy qua 1 Proxy riêng biệt (SOCKS5/HTTP), cách ly hoàn toàn IP giữa các file hồ sơ.
-* **Mô hình SaaS tự động hóa thương mại:** Khách hàng tự nạp tiền qua VietQR quét mã là tiền vào ví sau 2 giây, tự chọn gói thuê (Up Xu, Câu Cá, Full Auto), tự theo dõi tiến độ, xem nhật ký thời gian thực và tự gia hạn nick mà không cần admin can thiệp thủ công.
+The platform bridges an ultra-low-footprint **Java Headless Launcher** (~45MB RAM per bot instance) with an enterprise **Node.js Supervisor Core** handling process supervision, self-healing socket reconnections, cost-minimizing proxy bin-packing, and an automated 24/7 VietQR banking billing engine.
 
 ---
 
-## ⚙️ Các Chức năng Cốt lõi & Cách Hoạt động
+## 🎯 Core Problems Solved
 
-### 1. 🤖 Bộ Máy Tự Động Hóa Game (Smart Headless Game Engine)
-Mỗi tài khoản được khởi chạy trong một tiến trình Java độc lập, kết nối với Mod Game (ChipMix build13 / Fish build40) thông qua tầng giao tiếp nhị phân:
-* **🌾 Auto Farm Thông Minh (Nông trại):**
-  * Tự động chăm sóc toàn bộ nông trại: tưới nước, diệt sâu, nhổ cỏ, cho gà/bò/vịt ăn, thu hoạch trứng và sữa.
-  * **Hẹn giờ thu hoạch tự động:** Sau khi chăm sóc xong, bot đọc thời gian cây trồng chín từ RAM game (ví dụ: còn 23 phút) và tự động đặt lịch hẹn giờ quay lại thu hoạch đúng lúc, thời gian còn lại bot có thể chuyển sang câu cá hoặc đào mỏ để tối ưu tài nguyên!
-* **🎣 Auto Câu Cá Chuyên Nghiệp (Smart Fishing):**
-  * Tự động di chuyển đến khu vực câu cá, tự mua vé câu, tự mua mồi câu khi hết.
-  * Tự động giật cần khi cá cắn câu và bán cá sạch rương khi đầy để tiếp tục chu kỳ.
-* **💎 Auto Đào Kim Cương (Mine UPXU):**
-  * Tự động vào khu mỏ ngọc, sử dụng cuốc, đào khoáng sản kiếm đá và kim cương xanh (KCX).
-  * Tự động đổi bán đá lấy xu và hiển thị tốc độ cày xu thực tế trên giao diện.
-* **🎁 Auto Săn Quà Sự Kiện (Event Gift Hunter):**
-  * Đọc trực tiếp biến đếm tích lũy sự kiện từ RAM mod (`SkGift.lastX` / `SkGift.lastY`) với độ trễ 0ms.
-  * Tự động đồng bộ tiến độ nhận quà hàng ngày (ví dụ: `42/120`) và hiển thị thanh tiến độ kép trực quan cho cả Nông trại và Câu cá.
-  * Cơ chế chống log ảo thông minh: Chỉ xuất thông báo khi thực sự hoàn thành đợt thu hoạch, không lấy nhầm số lượng từ các hoạt động khác khi đổi trạng thái auto.
+### 1. Hardware Wear, High Electricity Costs & Battery Degradation
+* **The Problem:** Traditionally, players and rental providers keep physical mobile phones or desktop Android emulators (Nox, LDPlayer) powered on 24/7. These heavy emulators consume gigabytes of memory and max out CPU cores, leading to thermal throttling, hardware degradation, and massive electricity bills.
+* **The Solution:** The platform executes bots in headless Java Virtual Machine (JVM) micro-instances using MicroEmulator. It strips out all heavy windowing UI layers, running reliably on as little as **~45MB RAM per account**. A basic 2GB RAM cloud VPS can comfortably operate 30–40 bots continuously.
 
----
+### 2. Socket Disconnections & Missed Yield Cycles
+* **The Problem:** Unstable internet connections, server-side nightly maintenance, and socket drops cause unmonitored bots to disconnect. Crops wither, animals perish, fishing bait goes to waste, and limited-time event rewards are lost.
+* **The Solution:** An autonomous **Self-Healing Watchdog** continuously detects socket teardowns and server disconnects, executing an intelligent **Exponential Backoff with Random Jitter** reconnect algorithm. Bots automatically log back in, restore their routine, and resume work without operator intervention.
 
-### 2. 👥 Cổng Dịch Vụ Thuê Bot & Nạp Tiền Tự Động (Multi-Tenant SaaS)
-* **Thanh toán VietQR & payOS 24/7:**
-  * Khách hàng quét mã QR ngân hàng bất kỳ, tiền tự động cộng vào tài khoản trong vòng 2 giây nhờ cơ chế Webhook bảo mật HMAC-SHA256 kết hợp khóa chống trùng lặp (Idempotency Row Lock).
-* **Thuê nick tự phục vụ (Self-Service Rental):**
-  * Khách hàng tự chọn gói phù hợp: **Gói Úp Xu** (chỉ đào mỏ), **Gói Câu Cá**, hoặc **Gói Full Auto** (toàn quyền tất cả tính năng).
-  * Thuật toán phân bổ tài nguyên tự động (**Best-Fit Decreasing**) gán nick vào đúng Server (Hoàn Mỹ hoặc Diệu Kỳ), chọn File hồ sơ trống và cấp Proxy còn sống.
-* **Quản lý linh hoạt & Hoàn tiền theo ngày (Pro-rata Refund):**
-  * Cho phép người dùng dừng nick, đổi cài đặt, gia hạn ngày thuê hoặc hủy slot nhận lại tiền thừa vào ví tương ứng với số ngày chưa sử dụng.
+### 3. Exploding Infrastructure Costs When Renting Out Bots
+* **The Problem:** Naively assigning a dedicated proxy to every single rented bot multiplies proxy subscription costs, making commercial rental operations economically unprofitable.
+* **The Solution:** Game servers permit multiple connections per IP up to defined thresholds (e.g., maximum 3 bots per server Hoàn Mỹ / Diệu Kỳ). The platform implements a **Best-Fit Decreasing Dynamic Bin-Packing Algorithm** alongside a **2-Hour Waterfall Migration Engine**, packing bots densely onto the minimum necessary proxy pool, auto-draining expired IPs, and purchasing new proxies on-demand only when existing capacity is saturated.
+
+### 4. Manual Administration & Spreadsheet Overhead
+* **The Problem:** Rental shop owners historically track account credentials, rental duration, and client payments using spreadsheets, manually editing MicroEmulator binary `.rs` RecordStore files.
+* **The Solution:** A modern, multi-tenant SaaS portal where clients deposit funds via instant 24/7 VietQR banking, rent bot packages on-demand, adjust settings through a sleek web UI, and inspect real-time progress logs.
 
 ---
 
-### 3. 🌐 Quản trị Proxy Tự Động (Autonomous Proxy Lifecycle)
-* **Vòng đời Proxy khép kín 3 giai đoạn:**
-  * Hệ thống Cronjob chạy ngầm tự động quét và kiểm tra sức khỏe của từng Proxy.
-  * **Waterfall Migration (Chuyển tiếp 2 giờ):** Trước khi Proxy hết hạn 2 giờ, hệ thống tự động tìm Proxy mới khả dụng cùng Server để chuyển các nick sang, duy trì trạng thái online liên tục không bị gián đoạn.
-  * Tự động gia hạn hoặc thanh lý Proxy qua API của nhà cung cấp (proxy.vn) để tối ưu chi phí hạ tầng.
+## 🤖 In-Game Automation Engine
+
+Every account executes inside an isolated Java child process interacting directly with game mod bytecode (AngelChip ChipMix build13 & Fish build40) through binary RecordStore configuration and direct RAM extraction:
+
+```mermaid
+flowchart TD
+    MainTask{"Active Main Task"}
+    MainTask -->|Routine 1| Fish["🎣 Auto Fishing (Smart Bait & Ticket Loop)"]
+    MainTask -->|Routine 2| Mine["💎 Auto Diamond Mining (UPXU Mineral Engine)"]
+    
+    Fish -.-> BranchCheck{"Subtask Event Triggered?"}
+    Mine -.-> BranchCheck
+    
+    BranchCheck -->|Crops Matured| SubFarm["🌾 Branch to Auto Farm (Water, Weed, Harvest)"]
+    BranchCheck -->|Inventory Full| SubOre["🪨 Branch to Auto Sell Ore (Merchant Trip)"]
+    BranchCheck -->|Baby Needs Care| SubBaby["👶 Branch to Auto Baby Care (Feed & Bath)"]
+    
+    SubFarm --> Resume["✅ Complete Subtask & Read Next Timer Callback"]
+    SubOre --> Resume
+    SubBaby --> Resume
+    
+    Resume --> MainTask
+```
+
+### 1. 🌾 Smart Crop & Livestock Farming (`Auto Farm` / `farm`)
+* **Complete Automated Care:** Handles land plowing, seed planting, watering, weed pulling, pest removal, poultry and cattle feeding, egg harvesting, and milk collection.
+* **Intelligent Harvest Scheduling:** Upon finishing farm chores, the engine inspects in-game crop timers directly from RAM (e.g., "crops mature in 23 minutes"). It schedules an exact local timer callback, frees the bot to switch to secondary tasks (such as fishing or mining) in the meantime, and automatically returns to the farm the exact moment crops ripen.
+
+### 2. 🎣 Smart Fishing Engine (`Auto Fish` / `fish`)
+* **Autonomous Supply Loop:** Automatically navigates to the fishing zone, monitors ticket and bait inventories, and purchases refills from vendors whenever depleted.
+* **Precision Bite Detection:** Listens to game socket bite packets, executes rod retrieval with optimal timing, and offloads catches to vendors upon inventory saturation.
+
+### 3. 💎 Diamond & Mineral Mining (`Auto KC` / `diamond` / `UPXU`)
+* **Mine Shaft Automation:** Automates pickaxe acquisition, deep underground shaft navigation, rock breaking, and gemstone extraction (KCX, NHB).
+* **Live Earning Metrics:** Continuously computes and broadcasts coin generation velocity per hour to the web dashboard.
+
+### 4. 🪨 Inventory Offloading & Ore Selling (`Auto Bán Đá` / `sell_ore`)
+* **Bag Capacity Sentry:** Detects inventory capacity thresholds during mining routines.
+* **Seamless Merchant Trip:** Temporarily branches execution to visit the ore merchant, sells accumulated stone and gems, and immediately resumes mining.
+
+### 5. 👶 Baby Care Routine (`Auto Em Bé` / `baby`)
+* **Nurturing Automation:** Periodically checks infant status, feeding, bathing, and health maintenance routines according to configured schedules.
+
+### 6. 🎁 Event Gift Hunter & RAM Telemetry (`Auto Event` / `SkGift`)
+* **Zero-Latency RAM Extraction:** Reads event gift tallies directly from the mod's static memory structure (`SkGift.lastX` / `SkGift.lastY`) with $O(1)$ query speed.
+* **Dual Real-time Metric Tracking:** Delivers concurrent progress bars for both Farm harvest drops and Fishing event drops on the web interface.
+* **Harvest Anti-Ghosting Guard:** Anchors initial baseline silently (`prev < 0`) and guards checks by active task type (`lastAutoTask == 'farm'`), completely preventing fishing event counts from triggering false farm harvest logs when transitioning tasks.
+
+### 7. 🔄 Cooperative Subtask Interleaving
+* When assigned a primary long-running task (e.g., Auto Fishing or Auto Diamond Mining), the launcher dynamically pauses the main routine when a secondary priority arises (crops mature, ore bag is full, baby needs attention), executes the subtask, and seamlessly restores the primary workflow.
 
 ---
 
-### 4. 🖥️ Bảng Điều Khiển Trực Quan (Porsche & Apple Minimalist UI)
-* **Giao diện Thiết kế Đẳng cấp:**
-  * Phong cách tối giản, bố cục chia 2 cột sang trọng (Sidebar quản lý bên trái, danh sách nick và console bên phải).
-  * Hỗ trợ đầy đủ chế độ Sáng / Tối (Dark / Light Mode) với độ tương phản cao, chuyển đổi êm ái.
-  * Sử dụng 100% Vector SVG Icons sắc nét chuẩn Retina trên mọi màn hình.
-* **Terminal Console Thời Gian Thực (Live SSE Stream):**
-  * Truyền phát nhật ký máy chủ và nhật ký game trực tiếp lên trình duyệt qua Server-Sent Events (SSE) với độ trễ dưới 0.5 giây.
-  * Tự động bóc tách các ký hiệu nhận diện và render huy hiệu màu riêng biệt cho từng loại hoạt động: `[FARM]`, `[CÂU CÁ]`, `[ĐÁ/KC]`, `[SỰ KIỆN]`, `[LỖI]`, `[KẾT NỐI]`.
-* **Thẻ Nhật Ký Chi Tiết Từng Tài Khoản (`AccountLogsModal`):**
-  * Người dùng bấm vào từng nick để xem nhật ký riêng của nick đó, kèm thanh tiến độ quà sự kiện và các chỉ số tiền cày được trong ngày.
+## 🌐 Cost-Optimized Proxy Allocation Engine
+
+> [!NOTE]
+> In this platform, proxies are managed primarily as an **optimal resource packing mechanism to minimize rental overhead**, not merely for ban evasion. The system maximizes utilization within server concurrency thresholds.
+
+```mermaid
+graph LR
+    subgraph RentalRequests ["Incoming Rental Traffic"]
+        Req1["New Rental: Server Hoàn Mỹ"]
+        Req2["New Rental: Server Diệu Kỳ"]
+    end
+
+    subgraph AllocationEngine ["ResourceAllocationEngine (AsyncMutex Guard)"]
+        Engine["Best-Fit Decreasing Allocation Algorithm"]
+        Engine --- CheckPool["Inspect Active Proxies (Max 6 Bots: 3 HM / 3 DK)"]
+    end
+
+    subgraph ProxyActions ["Cost-Minimizing Actions"]
+        FillExisting["Fill 5/6 Slot Before 4/6 (Dense Packing)"]
+        Waterfall["Waterfall Migration (Drain Expiring IPs 2h Prior)"]
+        OnDemand["Auto-Purchase New Proxy ONLY When Pool Saturated"]
+    end
+
+    RentalRequests --> Engine
+    CheckPool --> FillExisting
+    CheckPool --> Waterfall
+    CheckPool --> OnDemand
+```
+
+### Technical Highlights of Proxy Cost Minimization
+1. **Best-Fit Decreasing (BFD) Allocation:** Rented accounts are sequentially assigned into existing active proxies with the highest load (filling $5/6$ slots before allocating $4/6$), minimizing the total count of simultaneously rented proxies.
+2. **Strict Server-Level Balancing:** Each proxy supports up to 6 accounts, strictly balanced as maximum 3 accounts on Server Hoàn Mỹ (0) and 3 accounts on Server Diệu Kỳ (1), maximizing hardware and proxy efficiency.
+3. **2-Hour Waterfall Migration:** The background cronjob (`ProxyLifecycleCron`) scans proxy expiration times. Exactly 2 hours prior to a proxy's expiration, bots bound to that proxy are automatically migrated to another healthy, active proxy on the same server, allowing expired proxies to drain naturally without renewal waste.
+4. **On-Demand Procurement via proxy.vn:** New proxies are automatically purchased via API **only** when all active proxies are operating at 100% capacity ($\ge 6$ bots), preventing idle proxy expenses.
 
 ---
 
-### 5. 🛡️ Kiến trúc Ghi Log & Bảo Mật Đa Tầng (Enterprise Security)
-* **Ghi log xoay vòng không nghẽn máy (`RotatingFileAppender`):**
-  * Toàn bộ log được gom qua bộ đệm bộ nhớ và ghi bất đồng bộ (batch flush 800ms/lần), không gây nghẽn luồng xử lý Node.js.
-  * Phân tách 2 file: `logs/app-YYYY-MM-DD.log` (hoạt động) và `logs/error-YYYY-MM-DD.log` (lỗi hệ thống & nguyên nhân chi tiết).
-  * Tự động xóa dọn log cũ sau 7 ngày, đảm bảo dung lượng lưu trữ trên VPS/Hosting luôn dưới 50MB.
-* **Phân quyền người dùng (RBAC) & Bảo vệ sở hữu nghiêm ngặt:**
-  * Phân tách quyền rõ ràng giữa **Quản trị viên (Admin)** và **Người thuê (User)**.
-  * Mọi API thao tác (chạy bot, dừng bot, sửa nick, xóa nick, xem log) đều kiểm tra quyền sở hữu `userId === req.user.sub`. Người dùng thông thường **tuyệt đối không thể can thiệp hay xem nick của người khác**.
-  * Mật khẩu tài khoản game luôn được che chắn thành `******` trước khi trả về máy khách.
-* **Cô lập phiên làm việc (Session Isolation):**
-  * Tự động dọn sạch bộ nhớ đệm trên trình duyệt khi chuyển đổi tài khoản hoặc đăng xuất, ngăn ngừa hiện tượng lưu vết tài khoản giữa các phiên đăng nhập.
+## 👥 Multi-Tenant Rental Marketplace & Billing
+
+* **Instant 24/7 VietQR & payOS Top-Up:** Deposits are confirmed via webhook in under 2 seconds. Protected by HMAC-SHA256 signature verification and database transaction row locks (`SELECT ... FOR UPDATE`) preventing double-credit exploits.
+* **Flexible Rental Tiers:**
+  * **UPXU Plan:** Automated Diamond & Mineral Mining with coin accumulation.
+  * **FISH Plan:** Smart Fishing with bait/ticket cycles and coin conversions.
+  * **FULL Plan:** Unrestricted access to Farm, Fish, Diamond, Sell Ore, and Event automation.
+* **Pro-Rata Daily Refund Engine:** Allows customers to cancel rented slots at any time, returning unused days back to their wallet balance automatically according to configured cancellation fee policies.
 
 ---
 
-## 💎 Những Điểm Nổi Bật & Đột Phá Kỹ Thuật
+## 🛡️ Enterprise Architecture & Security
 
-| Điểm nổi bật | Chi tiết kỹ thuật |
-| :--- | :--- |
-| **🚀 Siêu nhẹ & Tiết kiệm RAM** | Sử dụng OpenJDK headless chạy MicroEmulator tinh gọn: chỉ tốn **~45MB RAM / tài khoản** (thay vì 500MB – 1GB như giả lập Android). |
-| **⚡ Đọc RAM Mod Trực Tiếp** | Đọc dữ liệu sự kiện và chỉ số người chơi trực tiếp từ RAM game (`AvatarModAdapter` & `SkGift`) theo độ phức tạp $O(1)$, không cần hook can thiệp nguy hiểm. |
-| **🔄 Self-Healing Watchdog** | Nhận diện mất kết nối và tự động đăng nhập lại theo thuật toán **Exponential Backoff + Jitter**, chống hiện tượng bão kết nối (thundering herd) làm sập cổng game. |
-| **📦 100% MySQL Relational** | Lưu trữ hoàn toàn trên cơ sở dữ liệu MySQL thông qua Drizzle ORM, loại bỏ triệt để xung đột khóa file (`config.json`). |
-| **🌐 Triển khai Không cần Root** | Chạy mượt mà trên môi trường **cPanel Shared Hosting** thông qua *Setup Node.js App* (Phusion Passenger) với Java Portable tích hợp sẵn. |
-| **💰 Thanh toán Tự Động 2 Giây** | Tích hợp cổng thanh toán payOS với chữ ký điện tử HMAC-SHA256 và khóa giao dịch chống cộng tiền 2 lần. |
+* **Non-blocking Asynchronous Rotating Logger (`RotatingFileAppender`):** Logs stream through an in-memory queue flushed every 800ms in batched streams, completely decoupling disk I/O from the Node.js event loop. Outputs are cleanly separated into `logs/app-YYYY-MM-DD.log` and `logs/error-YYYY-MM-DD.log`, with automated 7-day archive purging keeping disk consumption below 50MB.
+* **In-Memory Ring Buffer (`CrossProcessBus`):** Retains up to 1,000 recent logs per account in RAM, enabling instant modal inspection in $< 0.5\text{ms}$ with zero disk lookups.
+* **Multi-Tenant Session Isolation & Anti-Ghosting State:** On login, logout, and unauthorized events, React state vectors (`accounts`, `status`, `files`, `proxies`, `logs`) are deterministically purged, eliminating ghost accounts across different user sessions.
+* **Server-Side Ownership Enforcement (RBAC):** Every mutating API endpoint (`start`, `stop`, `auto`, `setup`, `delete`, `reset`) validates `account.userId === req.user.sub`. Passwords are permanently masked as `******` across all public API envelopes.
 
 ---
 
-## 🏗️ Kiến Trúc Hệ Thống (Architecture)
+## 🏗️ Engine Architecture
 
 ```mermaid
 graph TD
@@ -150,16 +184,16 @@ graph TD
     subgraph NetworkRouting ["Dedicated Proxy Network"]
         JavaBot1 -->|"SOCKS5 Socket"| Proxy1["Proxy Pool (proxy.vn / Static)"]
         JavaBotN -->|"SOCKS5 Socket"| ProxyN["Proxy Pool (proxy.vn / Static)"]
-        Proxy1 -->|"Encrypted Traffic"| ServerHM["Game Server Hoàn Mỹ (HM)"]
-        ProxyN -->|"Encrypted Traffic"| ServerDK["Game Server Diệu Kỳ (DK)"]
+        Proxy1 -->|"Cost-Optimized Traffic"| ServerHM["Game Server Hoàn Mỹ (HM)"]
+        ProxyN -->|"Cost-Optimized Traffic"| ServerDK["Game Server Diệu Kỳ (DK)"]
     end
 ```
 
 ---
 
-## 🚀 Hướng Dẫn Khởi Chạy Nhanh (Quickstart)
+## 🚀 Quickstart
 
-### 1. Tải mã nguồn & Cài đặt thư viện
+### 1. Clone & Install Dependencies
 
 ```bash
 git clone https://github.com/hoangbmt023/auto-server-manager-avatar2d-angleChip.git
@@ -167,66 +201,66 @@ cd auto-server-manager-avatar2d-angleChip
 npm install
 ```
 
-### 2. Cấu hình Môi trường (`.env`)
+### 2. Configure Environment (`.env`)
 
-Sao chép file mẫu:
+Copy the environment template:
 
 ```bash
 cp .env.example .env.development
 ```
 
-Cập nhật thông tin kết nối MySQL và cấu hình cơ bản:
+Update your MySQL connection parameters in `.env.development`:
 
 ```env
 PORT=3001
 DB_HOST=localhost
 DB_PORT=3306
 DB_USER=root
-DB_PASSWORD=your_password
+DB_PASSWORD=your_mysql_password
 DB_NAME=avatar_2d_bot_manager
 APP_SECRET=your_super_secret_32_character_key
 ```
 
-### 3. Biên dịch Java Engine & Chạy Hệ Thống
+### 3. Compile Java Engine & Launch
 
 ```bash
-# Biên dịch Java Engine (yêu cầu JDK 8 - 21)
+# Compile Java Headless Engine (Requires JDK 8 - 21)
 node java-engine/build.js
 
-# Khởi chạy chế độ phát triển (Tự động đồng bộ Database Schema)
+# Development Mode (Includes Code-First Auto-Migration)
 npm run dev
 
-# Khởi chạy chế độ sản phẩm (Production)
+# Production Daemon
 npm run prod
 ```
 
-Mở trình duyệt tại địa chỉ: **`http://localhost:3001`**.
+Access the dashboard at **`http://localhost:3001`**.
 
 ---
 
-## 📖 Kho Tài Liệu Kỹ Thuật (Docs)
+## 📖 Documentation Hub
 
-Hệ sinh thái tài liệu chi tiết được tổ chức bài bản trong thư mục [`docs/`](docs/):
+Deep-dive operational and technical guides are maintained in the [`docs/`](docs/) directory:
 
-| Tài liệu | Nội dung chi tiết |
+| Document | Technical Coverage |
 | :--- | :--- |
-| [**System Design & Execution Pipeline**](docs/SYSTEM_DESIGN.md) | Kiến trúc đa tiến trình, định dạng nhị phân `.rs`, đồ họa dual-canvas, giao thức IPC, bộ telemetry RAM `SkGift` và thuật toán Watchdog |
-| [**Rental Engine & Proxy Lifecycle**](docs/RENTAL_AND_PROXY_LIFECYCLE.md) | Thuật toán xếp chỗ Best-Fit, chu trình chuyển tiếp Waterfall Migration 2 giờ, công thức tính hoàn tiền theo ngày và cơ chế chống lạm dụng |
-| [**RESTful API & Event Specification**](docs/API_SPECIFICATION.md) | Toàn bộ danh mục HTTP Endpoints, chuẩn Server-Sent Events (SSE), mã lỗi và xác thực chữ ký số webhook payOS |
-| [**Database Schema & Persistence**](docs/DATABASE.md) | Sơ đồ quan hệ thực thể (ERD), cấu trúc bảng MySQL, chiến lược lập chỉ mục (Index) và cơ chế tự động migration |
-| [**Production Deployment Guide**](docs/DEPLOYMENT_GUIDE.md) | Hướng dẫn triển khai từng bước trên cPanel Hosting (Setup Node.js App), VPS Linux (Systemd) và máy tính Windows |
-| [**UI/UX Design Engine**](docs/DESIGN.md) | Quy chuẩn thiết kế Porsche & Apple Minimalist, bảng mã màu, token giao diện và thư viện icon vector SVG |
+| [**System Design & Execution Pipeline**](docs/SYSTEM_DESIGN.md) | Multi-process supervisor, binary `.rs` RecordStore format, dual-canvas graphics, IPC protocol, `SkGift` RAM telemetry, and Watchdog backoff algorithms |
+| [**Rental Engine & Proxy Lifecycle**](docs/RENTAL_AND_PROXY_LIFECYCLE.md) | Best-Fit Decreasing packing, 2-hour Waterfall Migration rules, pro-rata refund mathematics, and abuse prevention |
+| [**RESTful API & Event Specification**](docs/API_SPECIFICATION.md) | Complete endpoint catalog, Server-Sent Events (SSE) schemas, payload structures, and payOS webhook verification |
+| [**Database Schema & Persistence**](docs/DATABASE.md) | MySQL Entity Relationship Diagram (ERD), tables, indexing strategies, and automated schema migrations |
+| [**Production Deployment Guide**](docs/DEPLOYMENT_GUIDE.md) | Step-by-step instructions for cPanel Hosting (Setup Node.js App), Linux VPS (Systemd), and Windows Workstation |
+| [**UI/UX Design Engine**](docs/DESIGN.md) | Porsche & Apple Minimalist design tokens, split layout, theme tokens, and SVG vector iconography |
 
 ---
 
-## 💻 Tùy Chọn Môi Trường Triển Khai
+## 💻 Deployment Options
 
-* **cPanel Shared Hosting**: Chạy trực tiếp qua tính năng **Setup Node.js App** (thông qua file khởi chạy `app.js` tích hợp Phusion Passenger). Hỗ trợ chạy không cần quyền root với Java Portable. Xem [Hướng dẫn triển khai cPanel](docs/DEPLOYMENT_GUIDE.md#2-deploying-on-cpanel-via-setup-nodejs-app).
-* **Linux VPS (Ubuntu / Debian)**: Quản lý tiến trình dịch vụ thông qua `systemd` hoặc PM2, hỗ trợ chạy nền bền bỉ 24/7/365. Xem [Hướng dẫn triển khai Linux VPS](docs/DEPLOYMENT_GUIDE.md#3-deploying-on-linux-vps-ubuntu-2204--debian-12).
-* **Windows Workstation**: Chạy trực tiếp trên Windows PowerShell / CMD với Node.js và JDK cài sẵn.
+* **cPanel Shared Hosting**: Deploys directly via **Setup Node.js App** (Phusion Passenger wrapper `app.js`). Runs with zero root requirements using self-contained portable OpenJDK. See the [cPanel Deployment Guide](docs/DEPLOYMENT_GUIDE.md#2-deploying-on-cpanel-via-setup-nodejs-app).
+* **Linux VPS (Ubuntu / Debian)**: Supervises bot daemons via `systemd` or PM2 with headless virtual framebuffer. See the [Linux VPS Guide](docs/DEPLOYMENT_GUIDE.md#3-deploying-on-linux-vps-ubuntu-2204--debian-12).
+* **Windows Workstation**: Executes natively using PowerShell / CMD with installed Node.js and JDK.
 
 ---
 
-## 📄 Giấy phép (License)
+## 📄 License
 
-Dự án được phân phối dưới giấy phép [MIT License](LICENSE).
+This project is licensed under the [MIT License](LICENSE).
