@@ -42,7 +42,7 @@ The platform bridges an ultra-low-footprint **Java Headless Launcher** (~45MB RA
 
 ### 2.3. Exploding Infrastructure Costs in Rental Operations
 * **The Problem:** Allocating an individual dedicated proxy to every rented account multiplies recurring infrastructure expenses, rendering commercial bot-rental services unprofitable.
-* **The Solution:** Game servers permit multiple connections per IP up to defined thresholds (e.g., maximum 3 bots per server Hoàn Mỹ / Diệu Kỳ). Rather than treating proxies merely as an anti-ban measure, the platform implements a **Best-Fit Decreasing Dynamic Bin-Packing Algorithm** and a **2-Hour Waterfall Migration Engine**. This packs accounts densely onto the minimum necessary proxy pool, auto-drains expiring IPs, and orders new proxies on-demand only when capacity is fully saturated.
+* **The Solution:** Game servers permit multiple connections per IP up to defined thresholds (e.g., maximum 3 bots per server: Hoan My [HM] / Dieu Ky [DK]). Rather than treating proxies merely as an anti-ban measure, the platform implements a **Best-Fit Decreasing Dynamic Bin-Packing Algorithm** and a **2-Hour Waterfall Migration Engine**. This packs accounts densely onto the minimum necessary proxy pool, auto-drains expiring IPs, and orders new proxies on-demand only when capacity is fully saturated.
 
 ### 2.4. Manual Administration & Spreadsheet Overhead
 * **The Problem:** Rental operators historically track customer credentials, expiration dates, and payments using spreadsheets, while manually generating MicroEmulator binary `.rs` RecordStore files.
@@ -82,15 +82,15 @@ flowchart TD
 * **Autonomous Supply Loop:** Navigates autonomously to the fishing zone, monitors ticket and bait stock, and replenishes supplies from vendors whenever depleted.
 * **Socket Bite Detection:** Intercepts game socket bite packets, executes rod retrieval with optimal latency, and offloads catches to merchants upon inventory saturation.
 
-### 3.3. Diamond & Mineral Mining (`Auto KC` / `diamond` / `UPXU`)
+### 3.3. Diamond & Mineral Mining (`Auto Mining` / `diamond` / `UPXU`)
 * **Underground Shaft Automation:** Automates pickaxe acquisition, deep underground shaft navigation, rock breaking, and gemstone extraction (KCX, NHB).
 * **Live Velocity Telemetry:** Continuously computes and broadcasts coin generation velocity per hour to the web dashboard.
 
-### 3.4. Inventory Offloading & Ore Selling (`Auto Bán Đá` / `sell_ore`)
+### 3.4. Automatic Ore Selling & Inventory Offloading (`Auto Sell Ore` / `sell_ore`)
 * **Capacity Sentry:** Detects inventory capacity thresholds during active mining routines.
 * **Merchant Trip:** Temporarily branches execution to visit the mineral merchant, sells accumulated stone and gems, and immediately resumes mining.
 
-### 3.5. Child Care Routine (`Auto Em Bé` / `baby`)
+### 3.5. Automated Infant Care Routine (`Auto Baby Care` / `baby`)
 * **Nurturing Automation:** Periodically verifies infant status, feeding, bathing, and health maintenance routines according to configured schedules.
 
 ### 3.6. Event Gift Hunter & RAM Telemetry (`Auto Event` / `SkGift`)
@@ -111,8 +111,8 @@ flowchart TD
 ```mermaid
 graph LR
     subgraph RentalRequests ["Incoming Rental Traffic"]
-        Req1["New Rental: Server Hoàn Mỹ"]
-        Req2["New Rental: Server Diệu Kỳ"]
+        Req1["New Rental: Server Hoan My (HM)"]
+        Req2["New Rental: Server Dieu Ky (DK)"]
     end
 
     subgraph AllocationEngine ["ResourceAllocationEngine (AsyncMutex Guard)"]
@@ -136,7 +136,7 @@ graph LR
 Rented accounts are sequentially assigned into existing active proxies with the highest load (filling $5/6$ slots before allocating $4/6$), minimizing the total count of simultaneously rented proxies across the infrastructure.
 
 ### 4.2. Strict Server-Level Balancing
-Each proxy supports up to 6 accounts, strictly balanced as maximum 3 accounts on Server Hoàn Mỹ (0) and 3 accounts on Server Diệu Kỳ (1), maximizing hardware and proxy efficiency without exceeding server socket limits.
+Each proxy supports up to 6 accounts, strictly balanced as maximum 3 accounts on Server Hoan My (0) and 3 accounts on Server Dieu Ky (1), maximizing hardware and proxy efficiency without exceeding server socket limits.
 
 ### 4.3. 2-Hour Waterfall Migration
 The background cronjob (`ProxyLifecycleCron`) scans proxy expiration times. Exactly 2 hours prior to a proxy's expiration, bots bound to that proxy are automatically migrated to another healthy, active proxy on the same server, allowing expired proxies to drain naturally without renewal waste.
@@ -188,8 +188,8 @@ graph TD
     subgraph NetworkRouting ["Dedicated Proxy Network"]
         JavaBot1 -->|"SOCKS5 Socket"| Proxy1["Proxy Pool (proxy.vn / Static)"]
         JavaBotN -->|"SOCKS5 Socket"| ProxyN["Proxy Pool (proxy.vn / Static)"]
-        Proxy1 -->|"Cost-Optimized Traffic"| ServerHM["Game Server Hoàn Mỹ (HM)"]
-        ProxyN -->|"Cost-Optimized Traffic"| ServerDK["Game Server Diệu Kỳ (DK)"]
+        Proxy1 -->|"Cost-Optimized Traffic"| ServerHM["Game Server Hoan My (HM)"]
+        ProxyN -->|"Cost-Optimized Traffic"| ServerDK["Game Server Dieu Ky (DK)"]
     end
 ```
 
