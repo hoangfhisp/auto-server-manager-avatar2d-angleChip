@@ -25,6 +25,10 @@ class MySqlConnectionPool {
   getPool() {
     if (!this.pool) {
       this.pool = mysql.createPool(this.config);
+      // Enforce strict UTC session timezone on every connection
+      this.pool.on('connection', (connection) => {
+        connection.query("SET time_zone = '+00:00'");
+      });
     }
     return this.pool;
   }

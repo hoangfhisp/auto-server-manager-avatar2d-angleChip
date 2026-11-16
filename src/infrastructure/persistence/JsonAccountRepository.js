@@ -77,6 +77,8 @@ class JsonAccountRepository extends IAccountRepository {
     const target = (config.accounts || []).find(a => a.id === id);
     if (target) {
       target.deleted_at = new Date();
+      target.rentalExpiresAt = new Date().toISOString();
+      target.rental_expires_at = new Date().toISOString();
       target.proxyId = null;
       target.proxy_id = null;
       this.configRepo.save(config);
