@@ -32,6 +32,7 @@ window.AppProvider = function AppProvider({ children }) {
 
   const sseRef = useRef(null);
   const terminalRef = useRef(null);
+  const lastFetchAccountsTimeRef = useRef(0);
 
   // Check session via HttpOnly Cookie refresh on mount
   useEffect(() => {
@@ -245,7 +246,12 @@ window.AppProvider = function AppProvider({ children }) {
     } catch (e) { }
   }, [isAdmin]);
 
-  const fetchAccounts = useCallback(async () => {
+  const fetchAccounts = useCallback(async (immediate = false) => {
+    const now = Date.now();
+    if (!immediate && (now - lastFetchAccountsTimeRef.current < 400)) {
+      return;
+    }
+    lastFetchAccountsTimeRef.current = now;
     try {
       const data = await window.ApiClient.getAccounts();
       if (data.success) {
@@ -669,7 +675,7 @@ window.AppProvider = function AppProvider({ children }) {
         try {
           const res = await window.rentalService.cancelSlot(id);
           if (res && (res.data || res.success)) {
-            fetchAccounts();
+            setAccounts(prev => prev.filter(acc => acc.id !== id));
             if (isAdmin) {
               fetchFiles();
               fetchProxies();
