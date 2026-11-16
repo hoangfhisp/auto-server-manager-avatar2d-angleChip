@@ -146,6 +146,15 @@ window.AppProvider = function AppProvider({ children }) {
     // Listen to unauthorized event
     const handleUnauthorized = () => {
       if (isMounted) {
+        if (sseRef.current) {
+          try { sseRef.current.close(); } catch (e) {}
+          sseRef.current = null;
+        }
+        setAccounts([]);
+        setFiles([]);
+        setProxies([]);
+        setLogs([]);
+        setStatus(null);
         setIsAuthenticated(false);
         setCurrentUser(null);
         window.ApiClient.setCurrentUser(null);
@@ -163,6 +172,12 @@ window.AppProvider = function AppProvider({ children }) {
     if (token && window.tokenManager) {
       window.tokenManager.setAccessToken(token);
     }
+    // Clean old state immediately to prevent ghost accounts across user sessions
+    setAccounts([]);
+    setFiles([]);
+    setProxies([]);
+    setLogs([]);
+    setStatus(null);
     setCurrentUser(user);
     setIsAuthenticated(true);
     if (user) window.ApiClient.setCurrentUser(user);
@@ -172,6 +187,15 @@ window.AppProvider = function AppProvider({ children }) {
     try {
       if (window.authService) await window.authService.logout();
     } catch (e) { }
+    if (sseRef.current) {
+      try { sseRef.current.close(); } catch (e) {}
+      sseRef.current = null;
+    }
+    setAccounts([]);
+    setFiles([]);
+    setProxies([]);
+    setLogs([]);
+    setStatus(null);
     setCurrentUser(null);
     setIsAuthenticated(false);
     window.ApiClient.setCurrentUser(null);
@@ -242,18 +266,23 @@ window.AppProvider = function AppProvider({ children }) {
 
   // SSE Stream & Synchronization
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated || !currentUser) return;
 
-    const isAdmin = currentUser && String(currentUser.role || '').toLowerCase() === 'admin';
+    const isAdmin = String(currentUser.role || '').toLowerCase() === 'admin';
 
-    if (!status) fetchStatus();
-    if (!accounts || accounts.length === 0) fetchAccounts();
+    // Always fetch fresh status and accounts for the active authenticated user
+    fetchStatus();
+    fetchAccounts();
 
     if (isAdmin) {
-      if (!files || files.length === 0) fetchFiles();
-      if (!proxies || proxies.length === 0) fetchProxies();
-      if (!availableJars || availableJars.length === 0) fetchJars();
+      fetchFiles();
+      fetchProxies();
+      fetchJars();
       fetchLogs();
+    } else {
+      setFiles([]);
+      setProxies([]);
+      setLogs([]);
     }
 
     const connectSSE = () => {

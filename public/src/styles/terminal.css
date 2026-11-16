@@ -179,15 +179,119 @@
   letter-spacing: -0.02em;
 }
 
+/* Category Tag Badge */
+.log-tag-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+  border: 1px solid transparent;
+}
+
+.log-tag-event {
+  background: rgba(191, 90, 242, 0.18);
+  color: #d175ff;
+  border-color: rgba(191, 90, 242, 0.35);
+}
+
+.log-tag-farm {
+  background: rgba(50, 215, 75, 0.15);
+  color: var(--apple-green);
+  border-color: rgba(50, 215, 75, 0.28);
+}
+
+.log-tag-fish {
+  background: rgba(100, 210, 255, 0.15);
+  color: var(--apple-teal);
+  border-color: rgba(100, 210, 255, 0.28);
+}
+
+.log-tag-ore {
+  background: rgba(255, 159, 10, 0.15);
+  color: var(--apple-orange);
+  border-color: rgba(255, 159, 10, 0.28);
+}
+
+.log-tag-network {
+  background: rgba(10, 132, 255, 0.15);
+  color: var(--apple-blue);
+  border-color: rgba(10, 132, 255, 0.28);
+}
+
+.log-tag-error {
+  background: rgba(255, 69, 58, 0.15);
+  color: var(--apple-red);
+  border-color: rgba(255, 69, 58, 0.28);
+}
+
+.log-tag-bot {
+  background: rgba(255, 255, 255, 0.08);
+  color: #999;
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+[data-theme="light"] .log-tag-bot {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--text-secondary);
+  border-color: rgba(0, 0, 0, 0.09);
+}
+
+[data-theme="light"] .log-tag-event {
+  background: rgba(175, 82, 222, 0.12);
+  color: #8f1cd9;
+  border-color: rgba(175, 82, 222, 0.25);
+}
+
+[data-theme="light"] .log-tag-farm {
+  background: rgba(40, 205, 65, 0.12);
+  color: #1e7e34;
+  border-color: rgba(40, 205, 65, 0.25);
+}
+
+[data-theme="light"] .log-tag-fish {
+  background: rgba(0, 113, 227, 0.1);
+  color: #0071e3;
+  border-color: rgba(0, 113, 227, 0.22);
+}
+
+[data-theme="light"] .log-tag-network {
+  background: rgba(0, 113, 227, 0.1);
+  color: #0071e3;
+  border-color: rgba(0, 113, 227, 0.22);
+}
+
+[data-theme="light"] .log-tag-error {
+  background: rgba(255, 59, 48, 0.12);
+  color: #d70015;
+  border-color: rgba(255, 59, 48, 0.25);
+}
+
 .log-user-badge {
-  background: var(--glass-bg);
+  background: rgba(10, 132, 255, 0.1);
   color: var(--apple-blue);
   padding: 1px 7px;
   border-radius: var(--radius-pill);
   font-weight: 600;
-  font-size: 0.7rem;
-  border: 1px solid var(--glass-border-subtle);
+  font-size: 0.68rem;
+  border: 1px solid rgba(10, 132, 255, 0.25);
   flex-shrink: 0;
+}
+
+[data-theme="light"] .log-user-badge {
+  background: rgba(0, 113, 227, 0.08);
+  color: #0071e3;
+  border-color: rgba(0, 113, 227, 0.22);
+}
+
+.log-inline-icon {
+  vertical-align: text-bottom;
+  margin-right: 4px;
+  display: inline-flex;
 }
 
 .log-msg {

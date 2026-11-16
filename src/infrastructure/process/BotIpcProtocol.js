@@ -57,6 +57,7 @@ class BotIpcProtocol {
       accountStatusUpdate: null,
       autoStatusUpdate: null,
       statsUpdate: null,
+      eventStatusUpdate: null,
       proxyExpiredReason: null,
       shouldCheckProxyHealth: false,
       loginWatchdogAction: null, // 'reset', 'clear', or null
@@ -72,7 +73,7 @@ class BotIpcProtocol {
     const currentAutoState = context.autoState || {};
     const currentStats = context.playerStats || {};
     const hasProxy = Boolean(context.proxyId);
-    // 0. Filter out internal proxy setup, sensitive connection logs, settings loading, and emulator bootstrap
+    // 0. LỌC BỎ NGAY TẠI NGUỒN (Ingress Filtering): Toàn bộ rác kỹ thuật giả lập microemu, bytecode & stacktraces
     if (
       line.includes('[PROXY SETUP]') ||
       line.includes('[GIẢ LẬP ANGELCHIP]') ||
@@ -89,7 +90,16 @@ class BotIpcProtocol {
       line.includes('headless arguments') ||
       line.includes('openJar') ||
       line.includes('loadJar') ||
-      /^[=\-─_]{8,}/.test(line)
+      line.includes('loadClass') ||
+      /^[=\-─_]{8,}/.test(line) ||
+      /(\[.*?\]\s*)?(index|readMapItem|doGetHandler|addElement):\s*\d*/i.test(line) ||
+      /\(null:-1\)/i.test(line) ||
+      /:\s*-1\)/i.test(line) ||
+      /^\t|\s{2,}(at |org\.|com\.|javax?\.|sun\.|[a-zA-Z0-9_$]+\.[a-zA-Z0-9_$]+)/.test(line) ||
+      /at java\.|at javax\.|at com\.|at org\./i.test(line) ||
+      /Exception in thread|java\.lang\./i.test(line) ||
+      /RecordStoreImpl|Font:|Graphics|MIDlet|UnsatisfiedLinkError|\[B@|\[C@|DeviceDisplay/i.test(line) ||
+      /\[TXR\]|TxRunner|\[CG\]|CoGiao|Bridge\.hidden|\[POP\]\s*hidden popup/i.test(line)
     ) {
       result.handledSpecialPacket = true;
       return result;
@@ -226,9 +236,22 @@ class BotIpcProtocol {
       return result;
     }
 
+    // 4.1. Game Event Progress Packet
+    if (line.includes('[EVENT_STATUS]:')) {
+      result.handledSpecialPacket = true;
+      try {
+        const jsonPart = line.substring(line.indexOf('[EVENT_STATUS]:') + 15).trim();
+        const parsed = JSON.parse(jsonPart);
+        result.eventStatusUpdate = parsed;
+      } catch (e) {}
+      return result;
+    }
+
     // 5. Standard Log Classification & Error Detection
     let type = streamType === 'stderr' ? 'error' : 'stdout';
-    if (line.includes('✅') || line.includes('THÀNH CÔNG')) {
+    if (line.includes('🎁') || line.includes('[SỰ KIỆN')) {
+      type = 'event';
+    } else if (line.includes('✅') || line.includes('THÀNH CÔNG')) {
       type = 'success';
     } else if (line.includes('❌') || line.includes('LỖI')) {
       type = 'error';

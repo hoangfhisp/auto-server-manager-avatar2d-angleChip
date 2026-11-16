@@ -48,6 +48,10 @@ const SystemController = require('./controllers/SystemController');
 const RentalController = require('./controllers/RentalController');
 const BillingController = require('./controllers/BillingController');
 const AdminAllocationController = require('./controllers/AdminAllocationController');
+const { createHttpAccessLogger } = require('./middlewares/HttpAccessLogger');
+const { LoggerFactory } = require('../../infrastructure/logging/Logger');
+
+const appLogger = LoggerFactory.getLogger('HttpServer');
 
 // Routes & Middlewares
 const Router = require('./Router');
@@ -308,7 +312,12 @@ class HttpServer {
       parseJsonBody: this.parseJsonBody.bind(this)
     };
 
+    const httpAccessLogger = createHttpAccessLogger();
+
     this.server = http.createServer(async (req, res) => {
+      // 0. HTTP Access Logger (Non-blocking async disk logger)
+      httpAccessLogger(req, res);
+
       const parsedUrl = url.parse(req.url, true);
       const pathname = parsedUrl.pathname;
 

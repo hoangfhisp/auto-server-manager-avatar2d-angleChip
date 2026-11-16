@@ -92,7 +92,7 @@ class StartBotAccountUseCase {
         throw new BadRequestException(`Tài khoản bot [${account.username}] đã hết hạn thuê! Vui lòng gia hạn để tiếp tục chạy.`);
       }
 
-      const isCustomerRental = Boolean(account.userId || account.rentalExpiresAt);
+      const isCustomerRental = Boolean(account.rentalPlan);
       let proxy = null;
 
       // 5.1 ĐẢM BẢO PROXY SỐNG KHẢ DỤNG QUA RESOURCE ALLOCATION ENGINE (CLEAN ARCHITECTURE)
@@ -150,6 +150,14 @@ class StartBotAccountUseCase {
       } catch (e) {}
     }
 
+    // Xóa cờ pendingReset trong Database ngay khi chuẩn bị chạy bot (chỉ chạy 1 lần duy nhất)
+    if (account.pendingReset) {
+      const needReset = true;
+      account.pendingReset = false;
+      await this.accountRepo.save(account);
+      account.pendingReset = needReset; // Truyền cờ sang SingleBotProcess cho phiên chạy này
+    }
+
     // 8. Instantiate SingleBotProcess with injected Proxy entity
     const botProcess = new SingleBotProcess(account, fileProfile, config, proxy);
 
@@ -172,13 +180,18 @@ class StartBotAccountUseCase {
       this.sseEventBus.broadcast('bot-auto-status', data);
     });
 
+    botProcess.on('event-status', (data) => {
+      this.multiBotManager.processRegistry.update(accountId, { eventState: data.eventState });
+      this.sseEventBus.broadcast('bot-event-status', data);
+    });
+
     botProcess.on('proxy-expired', async ({ proxyId, reason }) => {
       await this.multiBotManager.markProxyExpired(proxyId, reason, accountId);
     });
 
-    botProcess.on('stopped', async ({ accountId: stoppedId, wasManual }) => {
+    botProcess.on('stopped', async ({ accountId: stoppedId, wasManual, isTargetReached }) => {
       this.multiBotManager.processRegistry.unregister(stoppedId);
-      if (wasManual) {
+      if (wasManual || isTargetReached) {
         this.multiBotManager.runningBots.delete(stoppedId);
         await this.multiBotManager.persistRunningState();
       }

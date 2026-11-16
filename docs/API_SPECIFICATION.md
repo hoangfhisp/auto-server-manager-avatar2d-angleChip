@@ -100,7 +100,26 @@ Dispatched every 25 seconds to keep intermediary proxy connections alive:
 }
 ```
 
-#### 3. Real-time Balance Top-up (`event: balance_update`)
+#### 3. Account & Automation Runtime State (`event: bot-account-status` / `event: bot-auto-status`)
+Broadcasts state machine transitions and sub-task activity:
+```json
+{
+  "accountId": "018f3a2c-1234-7000-8000-000000000001",
+  "state": {
+    "state": "online",
+    "message": "Đang Treo Online",
+    "isError": false
+  },
+  "autoState": {
+    "isRunning": true,
+    "autoType": "farm",
+    "status": "active",
+    "message": "Đang chăm sóc nông trại..."
+  }
+}
+```
+
+#### 4. Real-time Balance Top-up (`event: balance_update`)
 Triggered automatically when a payOS or VietQR payment is confirmed:
 ```json
 {
@@ -125,28 +144,32 @@ Triggered automatically when a payOS or VietQR payment is confirmed:
 | `POST` | `/api/auth/logout` | User | Invalidate session refresh token |
 | `GET` | `/api/auth/me` | User | Retrieve current user profile & balance |
 
-### Bot Process Management (`/api/bot`)
+### Bot Process Management (`/api/bot` & `/api/accounts`)
 
 | Method | Endpoint | Auth | Description |
 | :--- | :--- | :--- | :--- |
-| `POST` | `/api/bot/start/:id` | User | Spawn Java process for specified account |
-| `POST` | `/api/bot/stop/:id` | User | Stop running Java process for specified account |
-| `POST` | `/api/bot/start-all` | User | Batch launch all idle accounts in current profile |
-| `POST` | `/api/bot/stop-all` | User | Batch stop all active accounts in current profile |
-| `GET` | `/api/bot/logs/history/:id` | User | Fetch buffered log history for account |
-| `GET` | `/api/bot/stats` | User | Aggregate CPU, memory, and running bot metrics |
+| `POST` | `/api/accounts/:id/start` | User (Owner/Admin) | Spawn isolated Java process for specified account |
+| `POST` | `/api/accounts/:id/stop` | User (Owner/Admin) | Stop running Java process for specified account |
+| `POST` | `/api/accounts/:id/auto` | User (Owner/Admin) | Trigger in-game routine (`farm`, `fish`, `diamond`, `sell_ore`, `event`) |
+| `GET` | `/api/accounts/:id/logs` | User (Owner/Admin) | O(1) in-memory lookup returning 300 latest clean log entries |
+| `POST` | `/api/start` | Admin | Batch launch all idle accounts in active profile |
+| `POST` | `/api/stop` | Admin | Batch stop all active accounts in active profile |
+| `POST` | `/api/restart` | Admin | Gracefully restart all running bot instances |
+| `GET` | `/api/status` | User | Aggregate CPU, memory, bot counts, and file metrics |
+| `GET` | `/api/logs` | Admin | Fetch system-wide activity log buffer |
+| `POST` | `/api/clear-logs` | Admin | Clear terminal log ring buffer |
 
 ### Account & Slot Management (`/api/accounts`)
 
 | Method | Endpoint | Auth | Description |
 | :--- | :--- | :--- | :--- |
-| `GET` | `/api/accounts` | User | List accounts with filtering, search, and pagination |
-| `POST` | `/api/accounts` | User | Create a new game account profile |
-| `GET` | `/api/accounts/:id` | User | Get detailed configuration of an account |
-| `PUT` | `/api/accounts/:id` | User | Update account credentials or mod settings |
-| `DELETE` | `/api/accounts/:id` | User | Delete account and purge orphan RMS files |
-| `POST` | `/api/accounts/:id/reset` | User | Reset accumulated coin and heart counters |
-| `POST` | `/api/accounts/:id/sync-rms` | User | Re-generate RMS binary stores without restarting |
+| `GET` | `/api/accounts` | User (Filtered) / Admin | List accounts (users only see their owned slots; password masked `******`) |
+| `POST` | `/api/accounts` | Admin / System | Create a new game account profile |
+| `PUT` | `/api/accounts/:id` | User (Owner/Admin) | Update account credentials or mod settings (system fields locked for users) |
+| `PUT` | `/api/accounts/:id/setup` | User (Owner/Admin) | Update target coin goals, duration days, or feature parameters |
+| `DELETE` | `/api/accounts/:id` | User (Owner/Admin) | Delete account profile and clear session logs |
+| `POST` | `/api/accounts/:id/reset` | User (Owner/Admin) | Reset accumulated coin and heart counters in mod RMS |
+| `POST` | `/api/accounts/:id/switch-server` | Admin | Migrate bot between Hoàn Mỹ (0) and Diệu Kỳ (1) |
 
 ### Multi-Tenant Rental Engine (`/api/rental`)
 

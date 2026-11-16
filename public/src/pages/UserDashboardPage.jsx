@@ -346,11 +346,13 @@ window.UserDashboardPage = function UserDashboardPage() {
     }
   };
 
-  // Filter accounts for current user
-  const userAccounts = (accounts || []).map(a => ({
-    ...a,
-    isUserView: true
-  }));
+  // Filter accounts for current user strictly (defense-in-depth against session overlap)
+  const userAccounts = (accounts || [])
+    .filter(a => currentUser && currentUser.id && a.userId && String(a.userId) === String(currentUser.id))
+    .map(a => ({
+      ...a,
+      isUserView: true
+    }));
 
   // Stats calculation based on user's rented accounts
   const totalRented = userAccounts.length;
