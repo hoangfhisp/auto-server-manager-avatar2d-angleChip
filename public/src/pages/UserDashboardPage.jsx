@@ -131,6 +131,16 @@ window.UserDashboardPage = function UserDashboardPage() {
   }, []);
 
   React.useEffect(() => {
+    window.__refreshUserBalance = refreshBalance;
+    const handleBalanceEvent = (e) => {
+      if (e && e.detail && typeof e.detail.newBalance === 'number') {
+        setBalance(e.detail.newBalance);
+      }
+      refreshBalance();
+      fetchRecentTransactions();
+    };
+    window.addEventListener('balance:updated', handleBalanceEvent);
+
     if (window.__initialBalance === undefined) {
       refreshBalance();
     }
@@ -146,7 +156,14 @@ window.UserDashboardPage = function UserDashboardPage() {
       }
       loadPolicy();
     }
-  }, [refreshBalance]);
+
+    return () => {
+      if (window.__refreshUserBalance === refreshBalance) {
+        window.__refreshUserBalance = null;
+      }
+      window.removeEventListener('balance:updated', handleBalanceEvent);
+    };
+  }, [refreshBalance, fetchRecentTransactions]);
 
 
 

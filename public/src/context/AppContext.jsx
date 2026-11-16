@@ -28,6 +28,7 @@ window.AppProvider = function AppProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(() => window.ApiClient.getCurrentUser());
   const [isAuthenticated, setIsAuthenticated] = useState(() => !!(window.tokenManager && window.tokenManager.getAccessToken()));
   const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const isAdmin = Boolean(currentUser && String(currentUser.role || '').toLowerCase() === 'admin');
 
   const sseRef = useRef(null);
   const terminalRef = useRef(null);
@@ -223,6 +224,7 @@ window.AppProvider = function AppProvider({ children }) {
   }, []);
 
   const fetchFiles = useCallback(async () => {
+    if (!isAdmin) return;
     try {
       const data = await window.ApiClient.getFiles();
       if (data.success) {
@@ -230,16 +232,17 @@ window.AppProvider = function AppProvider({ children }) {
         setActiveFileId(prev => (prev ? prev : (data.activeFileId || (data.files && data.files[0] ? data.files[0].id : 'file_1'))));
       }
     } catch (e) { }
-  }, []);
+  }, [isAdmin]);
 
   const fetchProxies = useCallback(async () => {
+    if (!isAdmin) return;
     try {
       const data = await window.ApiClient.getProxies();
       if (data.success) {
         setProxies(data.proxies || []);
       }
     } catch (e) { }
-  }, []);
+  }, [isAdmin]);
 
   const fetchAccounts = useCallback(async () => {
     try {
@@ -251,18 +254,20 @@ window.AppProvider = function AppProvider({ children }) {
   }, []);
 
   const fetchJars = useCallback(async () => {
+    if (!isAdmin) return;
     try {
       const data = await window.ApiClient.getAvailableJars();
       if (data.success) setAvailableJars(data.jars || []);
     } catch (e) { }
-  }, []);
+  }, [isAdmin]);
 
   const fetchLogs = useCallback(async () => {
+    if (!isAdmin) return;
     try {
       const data = await window.ApiClient.getLogs();
       if (data.success) setLogs(data.logs || []);
     } catch (e) { }
-  }, []);
+  }, [isAdmin]);
 
   // SSE Stream & Synchronization
   useEffect(() => {
@@ -658,11 +663,16 @@ window.AppProvider = function AppProvider({ children }) {
       const doCancelSlot = async () => {
         try {
           const res = await window.rentalService.cancelSlot(id);
-          if (res && res.data) {
+          if (res && (res.data || res.success)) {
             fetchAccounts();
-            fetchFiles();
-            fetchProxies();
-            if (fetchBalance) fetchBalance();
+            if (isAdmin) {
+              fetchFiles();
+              fetchProxies();
+            }
+            if (typeof window.__refreshUserBalance === 'function') {
+              window.__refreshUserBalance();
+            }
+            window.dispatchEvent(new CustomEvent('balance:updated', { detail: res.data || res }));
             if (window.showAlert) {
               window.showAlert(res.message || 'Đã hủy slot và hoàn tiền về ví thành công!', 'Hủy Slot Thành Công', 'success');
             }
