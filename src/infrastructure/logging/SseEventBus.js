@@ -21,9 +21,28 @@ class SseEventBus extends EventEmitter {
     });
 
     // Periodic heartbeat to keep connections alive
-    setInterval(() => {
+    this.heartbeatInterval = setInterval(() => {
       this.broadcastLocal('ping', { time: Date.now() });
     }, 25000);
+    if (this.heartbeatInterval.unref) {
+      this.heartbeatInterval.unref();
+    }
+  }
+
+  destroy() {
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = null;
+    }
+    for (const client of this.clients) {
+      try {
+        client.end();
+      } catch (e) {}
+    }
+    this.clients.clear();
+    if (this.ipcBus && typeof this.ipcBus.destroy === 'function') {
+      this.ipcBus.destroy();
+    }
   }
 
   getIpcBus() {

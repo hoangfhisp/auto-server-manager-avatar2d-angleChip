@@ -92,17 +92,25 @@ class CrossProcessBus extends EventEmitter {
       this.pollNewEvents();
       this.pollNewCommands();
     }, 80);
+    if (this.pollInterval && this.pollInterval.unref) {
+      this.pollInterval.unref();
+    }
 
+    this.fileWatchers = [];
     // Also watch files directly for zero-latency notification
     try {
       if (fs.existsSync(this.eventsFile)) {
-        fs.watch(this.eventsFile, () => this.pollNewEvents());
+        const w = fs.watch(this.eventsFile, () => this.pollNewEvents());
+        if (w && w.unref) w.unref();
+        this.fileWatchers.push(w);
       }
     } catch (e) {}
 
     try {
       if (fs.existsSync(this.commandsFile)) {
-        fs.watch(this.commandsFile, () => this.pollNewCommands());
+        const w = fs.watch(this.commandsFile, () => this.pollNewCommands());
+        if (w && w.unref) w.unref();
+        this.fileWatchers.push(w);
       }
     } catch (e) {}
   }
@@ -112,6 +120,16 @@ class CrossProcessBus extends EventEmitter {
       clearInterval(this.pollInterval);
       this.pollInterval = null;
     }
+    if (this.fileWatchers) {
+      for (const w of this.fileWatchers) {
+        try { w.close(); } catch (e) {}
+      }
+      this.fileWatchers = [];
+    }
+  }
+
+  destroy() {
+    this.stopWatcher();
   }
 
   /**

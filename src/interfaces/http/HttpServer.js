@@ -87,35 +87,35 @@ const MIME_TYPES = {
  * Powered 100% by MySQL Repositories (Database-Driven, zero config.json dependency).
  */
 class HttpServer {
-  constructor() {
-    this.sseEventBus = new SseEventBus();
+  constructor(options = {}) {
+    this.sseEventBus = options.sseEventBus || new SseEventBus();
 
     // MySQL Database & Transaction Infrastructure
-    this.dbPool = defaultPool;
-    this.drizzleDb = new DrizzleDb(this.dbPool);
-    this.transactionManager = new TransactionManager(this.dbPool);
-    this.migrator = new DatabaseMigrator(this.dbPool);
+    this.dbPool = options.dbPool || defaultPool;
+    this.drizzleDb = options.drizzleDb || (options.dbPool ? new DrizzleDb(this.dbPool) : new DrizzleDb(defaultPool));
+    this.transactionManager = options.transactionManager || new TransactionManager(this.dbPool);
+    this.migrator = options.migrator || new DatabaseMigrator(this.dbPool);
 
     // Repositories (Data Access Layer - Powered by Drizzle ORM)
-    this.userRepo = new MySqlUserRepository(this.dbPool, this.drizzleDb);
-    this.accountRepo = new MySqlAccountRepository(this.dbPool, this.drizzleDb);
-    this.fileRepo = new MySqlBotFileRepository(this.dbPool, this.drizzleDb);
-    this.proxyRepo = new MySqlProxyRepository(this.dbPool, this.drizzleDb);
-    this.settingRepo = new MySqlSystemSettingRepository(this.dbPool, this.drizzleDb);
-    this.refreshTokenRepo = new MySqlRefreshTokenRepository(this.dbPool, this.drizzleDb);
-    this.transactionRepo = new MySqlTransactionRepository(this.dbPool, this.drizzleDb);
-    this.voucherRepo = new MySqlVoucherRepository(this.dbPool, this.drizzleDb);
+    this.userRepo = options.userRepo || new MySqlUserRepository(this.dbPool, this.drizzleDb);
+    this.accountRepo = options.accountRepo || new MySqlAccountRepository(this.dbPool, this.drizzleDb);
+    this.fileRepo = options.fileRepo || new MySqlBotFileRepository(this.dbPool, this.drizzleDb);
+    this.proxyRepo = options.proxyRepo || new MySqlProxyRepository(this.dbPool, this.drizzleDb);
+    this.settingRepo = options.settingRepo || new MySqlSystemSettingRepository(this.dbPool, this.drizzleDb);
+    this.refreshTokenRepo = options.refreshTokenRepo || new MySqlRefreshTokenRepository(this.dbPool, this.drizzleDb);
+    this.transactionRepo = options.transactionRepo || new MySqlTransactionRepository(this.dbPool, this.drizzleDb);
+    this.voucherRepo = options.voucherRepo || new MySqlVoucherRepository(this.dbPool, this.drizzleDb);
 
     // Application Services (100% Database-Driven)
-    this.multiBotManager = new MultiBotManager(
+    this.multiBotManager = options.multiBotManager || new MultiBotManager(
       this.accountRepo,
       this.fileRepo,
       this.proxyRepo,
       this.settingRepo,
       this.sseEventBus
     );
-    this.authService = new AuthService(this.userRepo, undefined, undefined, undefined, this.refreshTokenRepo);
-    this.accountService = new AccountService(
+    this.authService = options.authService || new AuthService(this.userRepo, undefined, undefined, options.emailService, this.refreshTokenRepo);
+    this.accountService = options.accountService || new AccountService(
       this.accountRepo,
       this.fileRepo,
       this.proxyRepo,
@@ -123,24 +123,26 @@ class HttpServer {
       this.multiBotManager,
       this.userRepo
     );
-    this.fileProfileService = new FileProfileService(
+    this.fileProfileService = options.fileProfileService || new FileProfileService(
       this.fileRepo,
       this.accountRepo,
       this.settingRepo,
       this.multiBotManager,
       this.transactionManager
     );
-    this.proxyService = new ProxyService(
+    this.proxyService = options.proxyService || new ProxyService(
       this.proxyRepo,
       this.accountRepo,
       this.multiBotManager,
       this.sseEventBus,
       this.transactionManager
     );
-    this.allocationMutex = AsyncMutex.globalAllocationMutex;
-    this.proxyVnApiClient = new ProxyVnApiClient(config.proxyVn);
-    this.multiBotManager.setProxyVnApiClient(this.proxyVnApiClient);
-    this.allocationEngine = new ResourceAllocationEngine(
+    this.allocationMutex = options.allocationMutex || AsyncMutex.globalAllocationMutex;
+    this.proxyVnApiClient = options.proxyVnApiClient || new ProxyVnApiClient(config.proxyVn);
+    if (this.multiBotManager && typeof this.multiBotManager.setProxyVnApiClient === 'function') {
+      this.multiBotManager.setProxyVnApiClient(this.proxyVnApiClient);
+    }
+    this.allocationEngine = options.allocationEngine || new ResourceAllocationEngine(
       this.fileRepo,
       this.proxyRepo,
       this.accountRepo,
@@ -148,8 +150,10 @@ class HttpServer {
       this.proxyVnApiClient,
       this.allocationMutex
     );
-    this.multiBotManager.setAllocationEngine(this.allocationEngine);
-    this.proxyLifecycleCron = new ProxyLifecycleCron({
+    if (this.multiBotManager && typeof this.multiBotManager.setAllocationEngine === 'function') {
+      this.multiBotManager.setAllocationEngine(this.allocationEngine);
+    }
+    this.proxyLifecycleCron = options.proxyLifecycleCron || new ProxyLifecycleCron({
       proxyRepo: this.proxyRepo,
       accountRepo: this.accountRepo,
       multiBotManager: this.multiBotManager,
@@ -161,7 +165,7 @@ class HttpServer {
     });
 
     // Use Cases
-    this.rentSlotUseCase = new RentSlotUseCase(
+    this.rentSlotUseCase = options.rentSlotUseCase || new RentSlotUseCase(
       this.userRepo,
       this.accountRepo,
       this.transactionRepo,
@@ -172,8 +176,8 @@ class HttpServer {
       this.multiBotManager,
       this.proxyRepo
     );
-    this.payOsService = new PayOsService(this.settingRepo);
-    this.billingUseCase = new BillingUseCase(
+    this.payOsService = options.payOsService || new PayOsService(this.settingRepo);
+    this.billingUseCase = options.billingUseCase || new BillingUseCase(
       this.userRepo,
       this.transactionRepo,
       this.voucherRepo,
@@ -182,14 +186,14 @@ class HttpServer {
       this.sseEventBus,
       this.transactionManager
     );
-    this.manageAllocationUseCase = new ManageRentalAllocationsUseCase(
+    this.manageAllocationUseCase = options.manageAllocationUseCase || new ManageRentalAllocationsUseCase(
       this.settingRepo,
       this.voucherRepo,
       this.fileRepo,
       this.proxyRepo,
       this.allocationMutex
     );
-    this.cancelSlotUseCase = new CancelSlotUseCase({
+    this.cancelSlotUseCase = options.cancelSlotUseCase || new CancelSlotUseCase({
       accountRepo: this.accountRepo,
       userRepo: this.userRepo,
       transactionRepo: this.transactionRepo,
@@ -201,25 +205,26 @@ class HttpServer {
     });
 
     // Interface Controllers
-    this.authController = new AuthController(this.authService);
-    this.accountController = new AccountController(this.accountService, this.settingRepo, this.fileRepo, this.sseEventBus);
-    this.botController = new BotController(this.multiBotManager, this.sseEventBus, this.accountRepo, this.fileRepo, this.settingRepo);
-    this.fileController = new FileController(this.fileProfileService, this.fileRepo, this.sseEventBus, this.settingRepo);
-    this.proxyController = new ProxyController(this.proxyService, this.sseEventBus, this.proxyVnApiClient, this.settingRepo);
-    this.systemController = new SystemController(this.settingRepo, this.sseEventBus);
-    this.rentalController = new RentalController(
+    this.authController = options.authController || new AuthController(this.authService);
+    this.accountController = options.accountController || new AccountController(this.accountService, this.settingRepo, this.fileRepo, this.sseEventBus);
+    this.botController = options.botController || new BotController(this.multiBotManager, this.sseEventBus, this.accountRepo, this.fileRepo, this.settingRepo);
+    this.fileController = options.fileController || new FileController(this.fileProfileService, this.fileRepo, this.sseEventBus, this.settingRepo);
+    this.proxyController = options.proxyController || new ProxyController(this.proxyService, this.sseEventBus, this.proxyVnApiClient, this.settingRepo);
+    this.systemController = options.systemController || new SystemController(this.settingRepo, this.sseEventBus);
+    this.rentalController = options.rentalController || new RentalController(
       this.rentSlotUseCase,
       this.allocationEngine,
       this.cancelSlotUseCase
     );
-    this.billingController = new BillingController(this.billingUseCase, this.userRepo);
-    this.adminAllocationController = new AdminAllocationController(this.manageAllocationUseCase);
+    this.billingController = options.billingController || new BillingController(this.billingUseCase, this.userRepo);
+    this.adminAllocationController = options.adminAllocationController || new AdminAllocationController(this.manageAllocationUseCase);
 
     this.publicDir = path.resolve(__dirname, '../../../public');
     this.server = null;
     this.router = this.initRouter();
     this.authMiddleware = createAuthMiddleware(this.settingRepo, this.sendJson.bind(this), this.userRepo);
     this.parseJsonBody = parseJsonBody;
+    this.rentalWatchdogTimer = null;
   }
 
   initRouter() {
@@ -381,53 +386,100 @@ class HttpServer {
     });
   }
 
-  async start(port = null) {
+  async start(port = null, opts = {}) {
+    const runMigrator = opts.runMigrator !== undefined ? opts.runMigrator : true;
+    const startCron = opts.startCron !== undefined ? opts.startCron : true;
+    const startWatchdog = opts.startWatchdog !== undefined ? opts.startWatchdog : true;
+    const resumeBots = opts.resumeBots !== undefined ? opts.resumeBots : true;
+
     // 1. Run Code-First Schema Migration and Auto-Seeding
-    try {
-      await this.migrator.migrate();
-      await this.migrator.seedInitialData();
-    } catch (migErr) {
-      console.warn('⚠️ [Code-First Migrator] Không thể kết nối hoặc đồng bộ CSDL MySQL (Vui lòng kiểm tra lại cấu hình DB trong file .env):', migErr.message);
+    if (runMigrator) {
+      try {
+        await this.migrator.migrate();
+        await this.migrator.seedInitialData();
+      } catch (migErr) {
+        console.warn('⚠️ [Code-First Migrator] Không thể kết nối hoặc đồng bộ CSDL MySQL (Vui lòng kiểm tra lại cấu hình DB trong file .env):', migErr.message);
+      }
     }
 
     // 2. Start HTTP server
     this.initServer();
     const dbPort = await this.settingRepo.get('port');
-    const targetPort = port || dbPort || config.app.port || 3001;
+    const targetPort = (port !== null && port !== undefined) ? port : (dbPort || config.app.port || 3001);
 
-    this.server.listen(targetPort, () => {
-      console.log('=======================================================');
-      console.log('🚀 Avatar Multi-Bot Manager & Web Dashboard Clean Architecture (MySQL)');
-      console.log(`🌱 Môi trường (NODE_ENV) : ${config.app.env.toUpperCase()}`);
-      console.log(`📄 File biến môi trường  : ${config.app.loadedEnvFile}`);
-      console.log(`🌐 Dashboard URL         : http://localhost:${targetPort}`);
-      console.log(`📁 Nền tảng hệ thống     : ${process.platform} (${process.arch})`);
-      console.log('=======================================================');
+    return new Promise((resolve) => {
+      this.server.listen(targetPort, () => {
+        const address = this.server.address();
+        this.actualPort = typeof address === 'object' && address ? address.port : targetPort;
 
-      this.multiBotManager.resumePreviousRunningBots();
+        if (opts.silent !== true) {
+          console.log('=======================================================');
+          console.log('🚀 Avatar Multi-Bot Manager & Web Dashboard Clean Architecture (MySQL)');
+          console.log(`🌱 Môi trường (NODE_ENV) : ${config.app.env.toUpperCase()}`);
+          console.log(`📄 File biến môi trường  : ${config.app.loadedEnvFile}`);
+          console.log(`🌐 Dashboard URL         : http://localhost:${this.actualPort}`);
+          console.log(`📁 Nền tảng hệ thống     : ${process.platform} (${process.arch})`);
+          console.log('=======================================================');
+        }
 
-      // 3. Start Proxy Lifecycle & Waterfall Migration Cron
-      this.proxyLifecycleCron.start(30 * 60 * 1000);
+        if (resumeBots && this.multiBotManager && typeof this.multiBotManager.resumePreviousRunningBots === 'function') {
+          this.multiBotManager.resumePreviousRunningBots();
+        }
 
-      // 4. Rental Expiration Watchdog (Kiểm tra và ngắt an toàn bot hết hạn thuê)
-      setInterval(async () => {
-        try {
-          const allAccs = await this.accountRepo.findAll();
-          for (const acc of allAccs) {
-            if (acc.isRentalExpired()) {
-              const isRunning = this.multiBotManager.isAccountRunning(acc.id);
-              if (isRunning) {
-                console.log(`⏳ [Rental Watchdog] Tài khoản [${acc.username}] đã hết hạn thuê. Đang tự động ngắt kết nối an toàn...`);
-                await this.multiBotManager.stopAccount(acc.id);
-                this.accountController.broadcastChange();
+        // 3. Start Proxy Lifecycle & Waterfall Migration Cron
+        if (startCron && this.proxyLifecycleCron && typeof this.proxyLifecycleCron.start === 'function') {
+          this.proxyLifecycleCron.start(30 * 60 * 1000);
+        }
+
+        // 4. Rental Expiration Watchdog (Kiểm tra và ngắt an toàn bot hết hạn thuê)
+        if (startWatchdog) {
+          this.rentalWatchdogTimer = setInterval(async () => {
+            try {
+              const allAccs = await this.accountRepo.findAll();
+              for (const acc of allAccs) {
+                if (acc.isRentalExpired()) {
+                  const isRunning = this.multiBotManager.isAccountRunning(acc.id);
+                  if (isRunning) {
+                    console.log(`⏳ [Rental Watchdog] Tài khoản [${acc.username}] đã hết hạn thuê. Đang tự động ngắt kết nối an toàn...`);
+                    await this.multiBotManager.stopAccount(acc.id);
+                    this.accountController.broadcastChange();
+                  }
+                }
               }
-            }
+            } catch (e) {}
+          }, 60000);
+          if (this.rentalWatchdogTimer.unref) {
+            this.rentalWatchdogTimer.unref();
           }
-        } catch (e) {}
-      }, 60000);
-    });
+        }
 
-    return this.server;
+        resolve(this.server);
+      });
+    });
+  }
+
+  async stop() {
+    if (this.rentalWatchdogTimer) {
+      clearInterval(this.rentalWatchdogTimer);
+      this.rentalWatchdogTimer = null;
+    }
+    if (this.proxyLifecycleCron && typeof this.proxyLifecycleCron.stop === 'function') {
+      try {
+        this.proxyLifecycleCron.stop();
+      } catch (e) {}
+    }
+    if (this.multiBotManager && typeof this.multiBotManager.destroy === 'function') {
+      try {
+        await this.multiBotManager.destroy();
+      } catch (e) {}
+    }
+    if (this.sseEventBus && typeof this.sseEventBus.destroy === 'function') {
+      this.sseEventBus.destroy();
+    }
+    if (this.server) {
+      await new Promise((resolve) => this.server.close(resolve));
+      this.server = null;
+    }
   }
 }
 
