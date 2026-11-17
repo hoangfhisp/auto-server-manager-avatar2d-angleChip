@@ -8,13 +8,14 @@ const config = require('../../../../config');
  * Manages user balance, bonus top-up tiers, payOS payments, combined transaction history, and vouchers.
  */
 class BillingUseCase {
-  constructor(userRepo, transactionRepo, voucherRepo, settingRepo = null, payOsService = null, sseEventBus = null) {
+  constructor(userRepo, transactionRepo, voucherRepo, settingRepo = null, payOsService = null, sseEventBus = null, transactionManager = null) {
     this.userRepo = userRepo;
     this.transactionRepo = transactionRepo;
     this.voucherRepo = voucherRepo;
     this.settingRepo = settingRepo;
     this.payOsService = payOsService;
     this.sseEventBus = sseEventBus;
+    this.transactionManager = transactionManager;
   }
 
   async getCombinedHistory(userId, options = {}) {
@@ -194,8 +195,16 @@ class BillingUseCase {
     const bonusAmount = bonusPercent > 0 ? Math.round(rawAmount * (bonusPercent / 100)) : 0;
     const finalCredit = rawAmount + bonusAmount;
 
-    // Order code: unique integer
-    const orderCode = Number(String(Date.now()).slice(-6) + Math.floor(Math.random() * 89 + 10));
+    // Generate collision-safe unique orderCode (12 digits, well within JS Number.MAX_SAFE_INTEGER)
+    let orderCode;
+    let attempts = 0;
+    do {
+      orderCode = Number(`${Date.now().toString().slice(-8)}${Math.floor(1000 + Math.random() * 9000)}`);
+      const existing = this.transactionRepo.findByOrderCode ? await this.transactionRepo.findByOrderCode(orderCode) : null;
+      if (!existing) break;
+      attempts++;
+    } while (attempts < 5);
+
     const description = `A2A ${orderCode}`;
 
     const host = config.payment?.publicAppUrl || process.env.PUBLIC_APP_URL || 'http://localhost:3001';
@@ -281,37 +290,78 @@ class BillingUseCase {
     const finalCredit = rawAmount + bonusAmount;
 
     if (orderData && orderData.status === 'PAID') {
-      // 2. Chống Race Condition: Sử dụng claimPendingTransaction mang tính nguyên tử (Atomic Update)
+      // 2. Chống Race Condition: Sử dụng claimPendingTransaction và updateBalance trong cùng 1 ACID Database Transaction
       // Chỉ tiến hành cộng tiền nếu chính tiến trình này chuyển đổi thành công từ PENDING sang SUCCESS
-      const balanceBefore = user.balance;
-      const balanceAfter = balanceBefore + finalCredit;
-
       let claimed = false;
-      if (this.transactionRepo.claimPendingTransaction) {
-        claimed = await this.transactionRepo.claimPendingTransaction(tx.id, {
-          status: 'SUCCESS',
-          amount: finalCredit,
-          balanceBefore,
-          balanceAfter,
-          description: tx.description || `A2A ${orderCode}`
+      let finalBalanceAfter = user.balance + finalCredit;
+
+      if (this.transactionManager) {
+        const result = await this.transactionManager.withTransaction(async (conn) => {
+          const latestUser = await this.userRepo.findById(userId, conn);
+          const balanceBefore = latestUser ? latestUser.balance : user.balance;
+          const targetBalanceAfter = balanceBefore + finalCredit;
+
+          let txClaimed = false;
+          if (this.transactionRepo.claimPendingTransaction) {
+            txClaimed = await this.transactionRepo.claimPendingTransaction(tx.id, {
+              status: 'SUCCESS',
+              amount: finalCredit,
+              balanceBefore,
+              balanceAfter: targetBalanceAfter,
+              description: tx.description || `A2A ${orderCode}`
+            }, conn);
+          } else {
+            txClaimed = true;
+            await this.transactionRepo.update(tx.id, {
+              status: 'SUCCESS',
+              amount: finalCredit,
+              balanceBefore,
+              balanceAfter: targetBalanceAfter,
+              description: tx.description || `A2A ${orderCode}`
+            }, conn);
+          }
+
+          if (txClaimed) {
+            await this.userRepo.updateBalance(userId, finalCredit, conn);
+            return { claimed: true, balanceAfter: targetBalanceAfter };
+          }
+          return { claimed: false, balanceAfter: finalBalanceAfter };
         });
-      } else if (tx.status === 'PENDING') {
-        claimed = true;
-        await this.transactionRepo.update(tx.id, {
-          status: 'SUCCESS',
-          amount: finalCredit,
-          balanceBefore,
-          balanceAfter,
-          description: tx.description || `A2A ${orderCode}`
-        });
+
+        claimed = result.claimed;
+        finalBalanceAfter = result.balanceAfter;
+      } else {
+        const balanceBefore = user.balance;
+        finalBalanceAfter = balanceBefore + finalCredit;
+        if (this.transactionRepo.claimPendingTransaction) {
+          claimed = await this.transactionRepo.claimPendingTransaction(tx.id, {
+            status: 'SUCCESS',
+            amount: finalCredit,
+            balanceBefore,
+            balanceAfter: finalBalanceAfter,
+            description: tx.description || `A2A ${orderCode}`
+          });
+        } else if (tx.status === 'PENDING') {
+          claimed = true;
+          await this.transactionRepo.update(tx.id, {
+            status: 'SUCCESS',
+            amount: finalCredit,
+            balanceBefore,
+            balanceAfter: finalBalanceAfter,
+            description: tx.description || `A2A ${orderCode}`
+          });
+        }
+
+        if (claimed) {
+          await this.userRepo.updateBalance(userId, finalCredit);
+        }
       }
 
       if (claimed) {
-        await this.userRepo.updateBalance(userId, finalCredit);
         isNewCredit = true;
         if (this.sseEventBus) {
           try {
-            this.sseEventBus.broadcast('balance-updated', { userId, newBalance: balanceAfter });
+            this.sseEventBus.broadcast('balance-updated', { userId, newBalance: finalBalanceAfter });
           } catch (e) {}
         }
       }
@@ -353,17 +403,19 @@ class BillingUseCase {
     }
 
     if (tx.status === 'PENDING') {
+      try {
+        if (this.payOsService && this.payOsService.cancelPaymentLink) {
+          await this.payOsService.cancelPaymentLink(orderCode, 'Người dùng hủy thanh toán');
+        }
+      } catch (e) {
+        console.warn(`[PayOS] Không thể hủy payment link trên cổng payOS cho đơn #${orderCode}:`, e.message);
+      }
+
       if (this.transactionRepo.claimPendingTransaction) {
         await this.transactionRepo.claimPendingTransaction(tx.id, { status: 'CANCELLED' });
       } else {
         await this.transactionRepo.update(tx.id, { status: 'CANCELLED' });
       }
-
-      try {
-        if (this.payOsService && this.payOsService.cancelPaymentLink) {
-          await this.payOsService.cancelPaymentLink(orderCode, 'Người dùng hủy thanh toán');
-        }
-      } catch (e) {}
     }
 
     return {
@@ -387,6 +439,9 @@ class BillingUseCase {
     }
 
     const { orderCode, amount } = data;
+    if (!orderCode || !amount || Number(amount) <= 0) {
+      return { success: false, message: 'Dữ liệu giao dịch webhook không hợp lệ' };
+    }
 
     // Locate the transaction directly by orderCode column
     const matchedTx = await this.transactionRepo.findByOrderCode ? await this.transactionRepo.findByOrderCode(orderCode) : null;
@@ -419,39 +474,81 @@ class BillingUseCase {
 
     const bonusAmount = bonusPercent > 0 ? Math.round(amount * (bonusPercent / 100)) : 0;
     const finalCredit = amount + bonusAmount;
-    const balanceBefore = targetUser.balance;
-    const balanceAfter = balanceBefore + finalCredit;
 
-    // Chống Race Condition: Atomic claim transaction from PENDING to SUCCESS
+    // Chống Race Condition: Atomic claim transaction from PENDING to SUCCESS within ACID DB Transaction
     let claimed = false;
-    if (this.transactionRepo.claimPendingTransaction) {
-      claimed = await this.transactionRepo.claimPendingTransaction(matchedTx.id, {
-        status: 'SUCCESS',
-        amount: finalCredit,
-        balanceBefore,
-        balanceAfter,
-        description: matchedTx.description || `A2A ${orderCode}`
+    let finalBalanceAfter = targetUser.balance + finalCredit;
+
+    if (this.transactionManager) {
+      const result = await this.transactionManager.withTransaction(async (conn) => {
+        const latestUser = await this.userRepo.findById(targetUserId, conn);
+        const currentBalance = latestUser ? latestUser.balance : targetUser.balance;
+        const targetBalanceAfter = currentBalance + finalCredit;
+
+        let txClaimed = false;
+        if (this.transactionRepo.claimPendingTransaction) {
+          txClaimed = await this.transactionRepo.claimPendingTransaction(matchedTx.id, {
+            status: 'SUCCESS',
+            amount: finalCredit,
+            balanceBefore: currentBalance,
+            balanceAfter: targetBalanceAfter,
+            description: matchedTx.description || `A2A ${orderCode}`
+          }, conn);
+        } else {
+          txClaimed = true;
+          await this.transactionRepo.update(matchedTx.id, {
+            status: 'SUCCESS',
+            amount: finalCredit,
+            balanceBefore: currentBalance,
+            balanceAfter: targetBalanceAfter,
+            description: matchedTx.description || `A2A ${orderCode}`
+          }, conn);
+        }
+
+        if (txClaimed) {
+          await this.userRepo.updateBalance(targetUserId, finalCredit, conn);
+          return { claimed: true, balanceAfter: targetBalanceAfter };
+        }
+        return { claimed: false, balanceAfter: finalBalanceAfter };
       });
+
+      claimed = result.claimed;
+      finalBalanceAfter = result.balanceAfter;
     } else {
-      claimed = true;
-      await this.transactionRepo.update(matchedTx.id, {
-        status: 'SUCCESS',
-        amount: finalCredit,
-        balanceBefore,
-        balanceAfter,
-        description: matchedTx.description || `A2A ${orderCode}`
-      });
+      const balanceBefore = targetUser.balance;
+      finalBalanceAfter = balanceBefore + finalCredit;
+      if (this.transactionRepo.claimPendingTransaction) {
+        claimed = await this.transactionRepo.claimPendingTransaction(matchedTx.id, {
+          status: 'SUCCESS',
+          amount: finalCredit,
+          balanceBefore,
+          balanceAfter: finalBalanceAfter,
+          description: matchedTx.description || `A2A ${orderCode}`
+        });
+      } else {
+        claimed = true;
+        await this.transactionRepo.update(matchedTx.id, {
+          status: 'SUCCESS',
+          amount: finalCredit,
+          balanceBefore,
+          balanceAfter,
+          finalBalanceAfter,
+          description: matchedTx.description || `A2A ${orderCode}`
+        });
+      }
+
+      if (claimed) {
+        await this.userRepo.updateBalance(targetUserId, finalCredit);
+      }
     }
 
     if (!claimed) {
       return { success: true, message: 'Đơn hàng đã được xử lý bởi tiến trình khác!' };
     }
 
-    await this.userRepo.updateBalance(targetUserId, finalCredit);
-
     if (this.sseEventBus) {
       try {
-        this.sseEventBus.broadcast('balance-updated', { userId: targetUserId, newBalance: balanceAfter });
+        this.sseEventBus.broadcast('balance-updated', { userId: targetUserId, newBalance: finalBalanceAfter });
       } catch (e) {}
     }
 

@@ -61,9 +61,21 @@ class MySqlTransactionRepository {
     return entity;
   }
 
-  async findByOrderCode(orderCode) {
+  async findById(id, connection = null) {
+    if (!id) return null;
+    const db = this._getDb(connection);
+    const rows = await db
+      .select()
+      .from(transactions)
+      .where(eq(transactions.id, id))
+      .limit(1);
+
+    return rows.length > 0 ? this._mapRowToEntity(rows[0]) : null;
+  }
+
+  async findByOrderCode(orderCode, connection = null) {
     if (!orderCode) return null;
-    const db = this._getDb();
+    const db = this._getDb(connection);
     const rows = await db
       .select()
       .from(transactions)
@@ -97,9 +109,9 @@ class MySqlTransactionRepository {
    * Prevents race conditions and double crediting between Webhook and Redirect Verify.
    * Returns true if this operation successfully transitioned the transaction, false if already claimed.
    */
-  async claimPendingTransaction(id, { status = 'SUCCESS', amount, balanceBefore, balanceAfter, description }) {
+  async claimPendingTransaction(id, { status = 'SUCCESS', amount, balanceBefore, balanceAfter, description }, connection = null) {
     if (!id) return false;
-    const db = this._getDb();
+    const db = this._getDb(connection);
 
     const updateValues = { status };
     if (amount !== undefined) updateValues.amount = amount;

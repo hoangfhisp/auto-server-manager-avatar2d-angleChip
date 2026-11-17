@@ -69,13 +69,24 @@ class ResourceAllocationEngine {
     });
   }
 
-  async _allocateResourcesInternal(plan, durationMonths, requiredServerId = null) {
+  calculateContractExpiration(durationMonthsOrExpiry) {
+    if (durationMonthsOrExpiry instanceof Date) {
+      return durationMonthsOrExpiry;
+    }
+    if (typeof durationMonthsOrExpiry === 'number' || typeof durationMonthsOrExpiry === 'string') {
+      const months = Math.max(1, parseInt(durationMonthsOrExpiry || 1, 10));
+      return new Date(Date.now() + months * 30 * 86400 * 1000);
+    }
+    return new Date(Date.now() + 30 * 86400 * 1000);
+  }
+
+  async _allocateResourcesInternal(plan, durationMonthsOrExpiry, requiredServerId = null) {
     const rules = await this.getAllocationRules();
     const planKey = String(plan || 'UPXU').toUpperCase();
     const planConfig = rules.plans[planKey] || rules.plans.UPXU;
     const targetModType = planConfig.modType || 'UPXU';
-    const months = Math.max(1, parseInt(durationMonths || 1, 10));
-    const botExpiresAt = new Date(Date.now() + months * 30 * 86400 * 1000);
+
+    const botExpiresAt = this.calculateContractExpiration(durationMonthsOrExpiry);
 
     const [allFiles, allAccounts, allProxies] = await Promise.all([
       this.fileRepo.findAll(),
@@ -535,24 +546,32 @@ class ResourceAllocationEngine {
       proxy.failCount = (proxy.failCount || 0) + 1;
       await this.proxyRepo.save(proxy);
 
-      // Thử tìm proxy sống khác trong kho để chạy tạm
+      // Thử tìm proxy sống khác trong kho để chạy tạm (loại trừ chính proxy đang lỗi)
       const allProxies = await this.proxyRepo.findAll();
       const allAccounts = await this.accountRepo.findAll();
+      const candidateProxies = allProxies.filter(p => p.id !== proxy.id);
+
       const fallback = await this._selectOptimalProxy({
-        allProxies,
+        allProxies: candidateProxies,
         allAccounts,
         botExpiresAt: account.rentalExpiresAt || new Date(now + 30 * 86400 * 1000),
         requiredServerId: account.serverId
       });
 
       if (fallback && fallback.id !== proxy.id) {
-        account.proxyId = fallback.id;
-        await this.accountRepo.save(account);
-        return {
-          proxy: fallback,
-          changed: true,
-          reason: `Proxy [${proxy.name}] đang gặp sự cố mạng tạm thời (${testRes.message}). Đã tự động đổi sang Proxy [${fallback.name}]!`
-        };
+        // Health check candidate fallback before moving account to prevent hopping across dead proxies
+        try {
+          const fallbackCheck = await ProxyChecker.testProxy(fallback.toJSON ? fallback.toJSON() : fallback, 3000);
+          if (!fallbackCheck.isExpired) {
+            account.proxyId = fallback.id;
+            await this.accountRepo.save(account);
+            return {
+              proxy: fallback,
+              changed: true,
+              reason: `Proxy [${proxy.name}] đang gặp sự cố mạng tạm thời (${testRes.message}). Đã tự động đổi sang Proxy [${fallback.name}] hoạt động tốt!`
+            };
+          }
+        } catch (e) {}
       }
 
       return {

@@ -416,7 +416,7 @@ class RentSlotUseCase {
 
       if (needsNewAllocation) {
         console.log(`🔀 [RentSlotUseCase] Cấp phát lại tài nguyên cho [${account.username}] (Đổi gói hoặc đổi Proxy)...`);
-        const allocation = await this.allocationEngine.allocateResources(targetPlanKey, months, account.serverId);
+        const allocation = await this.allocationEngine.allocateResources(targetPlanKey, newExpiresAt, account.serverId);
         account.proxyId = allocation.proxyId;
         if (allocation.fileId) account.fileId = allocation.fileId;
         if (this.multiBotManager && this.multiBotManager.isAccountRunning(account.id)) {

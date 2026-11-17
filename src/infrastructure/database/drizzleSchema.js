@@ -10,7 +10,8 @@ const {
   datetime,
   mysqlEnum,
   json,
-  index
+  index,
+  uniqueIndex
 } = require('drizzle-orm/mysql-core');
 const { relations } = require('drizzle-orm');
 
@@ -143,7 +144,7 @@ const transactions = mysqlTable('transactions', {
   createdAt: timestamp('created_at').defaultNow().notNull()
 }, (table) => [
   index('idx_transactions_user_id').on(table.userId),
-  index('idx_transactions_order_code').on(table.orderCode),
+  uniqueIndex('uidx_transactions_order_code').on(table.orderCode),
   index('idx_transactions_status').on(table.status),
   index('idx_transactions_type').on(table.type),
   index('idx_transactions_created_at').on(table.createdAt),

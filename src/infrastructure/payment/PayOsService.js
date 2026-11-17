@@ -107,6 +107,10 @@ class PayOsService {
         });
       });
 
+      req.setTimeout(10000, () => {
+        req.destroy(new Error('Yêu cầu tạo link thanh toán payOS bị quá thời gian (10s timeout)'));
+      });
+
       req.on('error', (err) => {
         reject(new Error(`Kết nối payOS thất bại: ${err.message}`));
       });
@@ -154,6 +158,10 @@ class PayOsService {
         });
       });
 
+      req.setTimeout(10000, () => {
+        req.destroy(new Error('Yêu cầu tạo link thanh toán payOS bị quá thời gian (10s timeout)'));
+      });
+
       req.on('error', (err) => {
         reject(new Error(`Kết nối payOS thất bại: ${err.message}`));
       });
@@ -195,6 +203,10 @@ class PayOsService {
             resolve(null);
           }
         });
+      });
+
+      req.setTimeout(10000, () => {
+        req.destroy(new Error('Yêu cầu hủy link thanh toán payOS bị quá thời gian (10s timeout)'));
       });
 
       req.on('error', () => resolve(null));

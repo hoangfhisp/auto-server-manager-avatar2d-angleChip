@@ -1,5 +1,6 @@
 const EventEmitter = require('events');
 const CrossProcessBus = require('../ipc/CrossProcessBus');
+const config = require('../../../config');
 
 /**
  * SseEventBus (Infrastructure Layer)
@@ -20,22 +21,60 @@ class SseEventBus extends EventEmitter {
     });
 
     // Periodic heartbeat to keep connections alive
-    setInterval(() => {
+    this.heartbeatInterval = setInterval(() => {
       this.broadcastLocal('ping', { time: Date.now() });
     }, 25000);
+    if (this.heartbeatInterval.unref) {
+      this.heartbeatInterval.unref();
+    }
+  }
+
+  destroy() {
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = null;
+    }
+    for (const client of this.clients) {
+      try {
+        client.end();
+      } catch (e) {}
+    }
+    this.clients.clear();
+    if (this.ipcBus && typeof this.ipcBus.destroy === 'function') {
+      this.ipcBus.destroy();
+    }
   }
 
   getIpcBus() {
     return this.ipcBus;
   }
 
-  addClient(res) {
+  addClient(res, req = null) {
+    let allowedOrigin = '*';
+    const requestOrigin = req?.headers?.origin;
+    const allowedOrigins = config?.cors?.allowedOrigins || ['*'];
+
+    if (requestOrigin) {
+      if (
+        allowedOrigins.includes(requestOrigin) ||
+        /^https?:\/\/(localhost|127\.0\.0\.1)(:[0-9]+)?$/.test(requestOrigin)
+      ) {
+        allowedOrigin = requestOrigin;
+      } else if (allowedOrigins.includes('*')) {
+        allowedOrigin = '*';
+      } else {
+        res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ success: false, message: 'CORS policy: SSE origin not allowed' }));
+        return;
+      }
+    }
+
     res.writeHead(200, {
       'Content-Type': 'text/event-stream; charset=utf-8',
       'Cache-Control': 'no-cache, no-transform',
       'Connection': 'keep-alive',
       'X-Accel-Buffering': 'no',
-      'Access-Control-Allow-Origin': '*'
+      'Access-Control-Allow-Origin': allowedOrigin
     });
 
     res.write(`data: ${JSON.stringify({ type: 'connected', message: 'SSE Live Stream Connected', workerPid: process.pid })}\n\n`);
