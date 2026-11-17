@@ -44,6 +44,8 @@ Each game account is executed inside its own dedicated child process. This guara
 When launching a bot account, `SingleBotProcess` constructs the command line arguments:
 
 ```bash
+# Password is intentionally excluded from CLI properties to prevent ps aux exposure
+# It is securely passed via process environment: env.AVATAR_PASS
 java \
   -Djava.awt.headless=true \
   -Dmicroemulator.display=headless \
@@ -51,15 +53,22 @@ java \
   -Dmicroemulator.rms.path=.microemulator/suite-avatar_<username>_<fileId> \
   -DsocksProxyHost=<proxy_host> \
   -DsocksProxyPort=<proxy_port> \
-  -Djava.net.socks.username=<proxy_user> \
-  -Djava.net.socks.password=<proxy_pass> \
-  -Xms32m \
-  -Xmx64m \
+  -DsocksProxyVersion=5 \
+  -Davatar.user=<username> \
+  -Davatar.server=<server_id> \
+  -Xms12m \
+  -Xmx48m \
   -XX:+UseSerialGC \
   -jar jars/emulator/AngelChipEmulator_V2Proxy.jar \
   avatar_main \
   jars/games/<game_jar>
 ```
+
+> [!NOTE]
+> **Hardened Lifecycle & Security Guarantees:**
+> * **Process Isolation State Machine:** `SingleBotProcess` tracks atomic lifecycle states: `IDLE` $\rightarrow$ `STARTING` $\rightarrow$ `RUNNING` $\rightarrow$ `STOPPING` $\rightarrow$ `STOPPED`.
+> * **Stop/Start Race Immunity:** Process termination holds dedicated instance references, ensuring stale `close` callbacks from dying JVMs cannot invalidate newly spawned child processes.
+> * **Protected Credentials:** Password credentials are never exposed in Linux process listings (`ps aux`), operating via runtime `env.AVATAR_PASS` fallback in `AvatarHeadlessLauncher.java`.
 
 ### Process Supervision State Machine
 

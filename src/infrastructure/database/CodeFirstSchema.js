@@ -146,7 +146,7 @@ const TABLES = {
     },
     indexes: [
       { name: 'idx_transactions_user_id', columns: ['user_id'] },
-      { name: 'idx_transactions_order_code', columns: ['order_code'] },
+      { name: 'uidx_transactions_order_code', columns: ['order_code'], unique: true },
       { name: 'idx_transactions_status', columns: ['status'] },
       { name: 'idx_transactions_type', columns: ['type'] },
       { name: 'idx_transactions_created_at', columns: ['created_at'] },
