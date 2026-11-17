@@ -179,7 +179,8 @@ class HttpServer {
       this.voucherRepo,
       this.settingRepo,
       this.payOsService,
-      this.sseEventBus
+      this.sseEventBus,
+      this.transactionManager
     );
     this.manageAllocationUseCase = new ManageRentalAllocationsUseCase(
       this.settingRepo,
@@ -328,7 +329,7 @@ class HttpServer {
 
       // 2. SSE Endpoint
       if (pathname === '/api/events') {
-        return this.sseEventBus.addClient(res);
+        return this.sseEventBus.addClient(res, req);
       }
 
       // 3. Public API check auth endpoint

@@ -238,8 +238,17 @@ public class AvatarHeadlessLauncher {
 
 
 
-        String customUser = System.getProperty("avatar.user");
-        String customPass = System.getProperty("avatar.pass");
+        String rawUser = System.getProperty("avatar.user");
+        if (rawUser == null || rawUser.isEmpty()) {
+            rawUser = System.getenv("AVATAR_USER");
+        }
+        final String customUser = rawUser;
+
+        String rawPass = System.getProperty("avatar.pass");
+        if (rawPass == null || rawPass.isEmpty()) {
+            rawPass = System.getenv("AVATAR_PASS");
+        }
+        final String customPass = rawPass;
         String customServer = System.getProperty("avatar.server");
         String[] defaultServers = new String[] { "Hoàn Mỹ", "Diệu Kỳ", "Huyền Diệu", "Thần Tiên", "Mộng Mơ", "Song Tử", "Bạch Dương" };
         String resolvedServerName = System.getProperty("avatar.serverName");

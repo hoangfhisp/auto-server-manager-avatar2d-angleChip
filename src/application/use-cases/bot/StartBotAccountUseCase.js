@@ -189,6 +189,20 @@ class StartBotAccountUseCase {
       await this.multiBotManager.markProxyExpired(proxyId, reason, accountId);
     });
 
+    botProcess.on('process-error', (errData) => {
+      this.sseEventBus.addLog({
+        timestamp: new Date().toLocaleTimeString('vi-VN', { hour12: false }),
+        type: 'error',
+        accountId,
+        text: `❌ Lỗi tiến trình bot: ${errData.error?.message || errData.error}`
+      });
+    });
+
+    botProcess.on('error', (errData) => {
+      // Guard against unhandled error event crashes in Node.js
+      console.warn(`[StartBotAccountUseCase] Bot process error event [${accountId}]:`, errData);
+    });
+
     botProcess.on('stopped', async ({ accountId: stoppedId, wasManual, isTargetReached }) => {
       this.multiBotManager.processRegistry.unregister(stoppedId);
       if (wasManual || isTargetReached) {

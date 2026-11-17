@@ -18,6 +18,7 @@ class SingleBotProcess extends EventEmitter {
     this.proxy = proxy;
     this.child = null;
     this.startTime = null;
+    this.lifecycleState = 'IDLE'; // IDLE | STARTING | RUNNING | STOPPING | STOPPED
     this.restartAttempts = 0;
     this.isManualStop = false;
     this.loginWatchdogTimer = null;
@@ -68,6 +69,52 @@ class SingleBotProcess extends EventEmitter {
     return path.resolve(this.workspaceRoot, 'jars/games', jarFilename);
   }
 
+  getLifecycleState() {
+    return this.lifecycleState;
+  }
+
+  buildProxyArgs(proxy) {
+    const args = [];
+    if (!proxy || !proxy.host || !proxy.port) return args;
+
+    const type = (proxy.type || 'socks').toLowerCase();
+    if (type === 'socks' || type === 'socks5' || type === 'socks4') {
+      args.push(`-DsocksProxyHost=${proxy.host}`);
+      args.push(`-DsocksProxyPort=${proxy.port}`);
+      const socksVersion = (type === 'socks4') ? '4' : '5';
+      args.push(`-DsocksProxyVersion=${socksVersion}`);
+      if (proxy.username) {
+        args.push(`-Djava.net.socks.username=${proxy.username}`);
+        args.push(`-Davatar.proxyUser=${proxy.username}`);
+      }
+      if (proxy.password) {
+        args.push(`-Djava.net.socks.password=${proxy.password}`);
+        args.push(`-Davatar.proxyPass=${proxy.password}`);
+      }
+    } else {
+      args.push(`-Dhttp.proxyHost=${proxy.host}`);
+      args.push(`-Dhttp.proxyPort=${proxy.port}`);
+      args.push(`-Dhttps.proxyHost=${proxy.host}`);
+      args.push(`-Dhttps.proxyPort=${proxy.port}`);
+      if (proxy.username) {
+        args.push(`-Dhttp.proxyUser=${proxy.username}`);
+        args.push(`-Davatar.proxyUser=${proxy.username}`);
+      }
+      if (proxy.password) {
+        args.push(`-Dhttp.proxyPassword=${proxy.password}`);
+        args.push(`-Davatar.proxyPass=${proxy.password}`);
+      }
+    }
+    args.push('-Djava.net.useSystemProxies=true');
+    args.push('-Dhttp.nonProxyHosts=angelchip.net|*.angelchip.net');
+    args.push('-Dhttps.nonProxyHosts=angelchip.net|*.angelchip.net');
+    args.push('-Djdk.http.auth.tunneling.disabledSchemes=');
+    args.push(`-Davatar.proxyHost=${proxy.host}`);
+    args.push(`-Davatar.proxyPort=${proxy.port}`);
+    args.push(`-Davatar.proxyType=${type}`);
+    return args;
+  }
+
   buildArgs(javaBin) {
     const args = [];
     const memoryMb = parseInt(this.globalConfig.maxMemoryMb || 48, 10);
@@ -103,9 +150,8 @@ class SingleBotProcess extends EventEmitter {
     args.push('-Dstderr.encoding=UTF-8');
     args.push(`-Duser.home=${this.workspaceRoot}`);
 
-    // Pass account-specific properties
+    // Pass account-specific properties (Password is kept strictly out of CLI args to protect against ps aux exposure)
     if (this.account.username) args.push(`-Davatar.user=${this.account.username}`);
-    if (this.account.password) args.push(`-Davatar.pass=${this.account.password}`);
     args.push(`-Davatar.server=${this.account.serverId !== undefined ? this.account.serverId : 0}`);
     args.push(`-Davatar.serverName=${this.account.serverName || (this.account.serverId === 0 ? 'Hoàn Mỹ' : 'Diệu Kỳ')}`);
 
@@ -213,40 +259,7 @@ class SingleBotProcess extends EventEmitter {
     this.proxy = proxy;
 
     if (proxy && proxy.host && proxy.port) {
-      const type = (proxy.type || 'socks').toLowerCase();
-      if (type === 'socks' || type === 'socks5' || type === 'socks4') {
-        args.push(`-DsocksProxyHost=${proxy.host}`);
-        args.push(`-DsocksProxyPort=${proxy.port}`);
-        args.push('-DsocksProxyVersion=5');
-        if (proxy.username) {
-          args.push(`-Djava.net.socks.username=${proxy.username}`);
-          args.push(`-Davatar.proxyUser=${proxy.username}`);
-        }
-        if (proxy.password) {
-          args.push(`-Djava.net.socks.password=${proxy.password}`);
-          args.push(`-Davatar.proxyPass=${proxy.password}`);
-        }
-      } else {
-        args.push(`-Dhttp.proxyHost=${proxy.host}`);
-        args.push(`-Dhttp.proxyPort=${proxy.port}`);
-        args.push(`-Dhttps.proxyHost=${proxy.host}`);
-        args.push(`-Dhttps.proxyPort=${proxy.port}`);
-        if (proxy.username) {
-          args.push(`-Dhttp.proxyUser=${proxy.username}`);
-          args.push(`-Davatar.proxyUser=${proxy.username}`);
-        }
-        if (proxy.password) {
-          args.push(`-Dhttp.proxyPassword=${proxy.password}`);
-          args.push(`-Davatar.proxyPass=${proxy.password}`);
-        }
-      }
-      args.push('-Djava.net.useSystemProxies=true');
-      args.push('-Dhttp.nonProxyHosts=angelchip.net|*.angelchip.net');
-      args.push('-Dhttps.nonProxyHosts=angelchip.net|*.angelchip.net');
-      args.push('-Djdk.http.auth.tunneling.disabledSchemes=');
-      args.push(`-Davatar.proxyHost=${proxy.host}`);
-      args.push(`-Davatar.proxyPort=${proxy.port}`);
-      args.push(`-Davatar.proxyType=${type}`);
+      args.push(...this.buildProxyArgs(proxy));
       this.usingDirectIp = false;
     } else {
       this.usingDirectIp = true;
@@ -288,11 +301,18 @@ class SingleBotProcess extends EventEmitter {
   }
 
   start(javaBin) {
-    if (this.child && !this.child.killed) {
+    if (this.lifecycleState === 'STOPPING') {
+      this.emitLog('warn', `⏳ [${this.account.username}] Tiến trình đang dừng, vui lòng đợi hoàn tất trước khi khởi chạy lại.`);
+      return false;
+    }
+
+    if (this.child && !this.child.killed && this.lifecycleState === 'RUNNING') {
       return false;
     }
 
     this.isManualStop = false;
+    this.lifecycleState = 'STARTING';
+
     if (this.restartTimer) {
       clearTimeout(this.restartTimer);
       this.restartTimer = null;
@@ -303,16 +323,21 @@ class SingleBotProcess extends EventEmitter {
       const serverName = this.account.serverName || (this.account.serverId === 0 ? 'Hoàn Mỹ' : 'Diệu Kỳ');
       this.emitLog('system', `🚀 [${this.account.username}] Khởi chạy tiến trình bot trên Server [${serverName}]...`);
 
-      this.child = spawn(javaBin, args, {
+      const child = spawn(javaBin, args, {
         cwd: this.workspaceRoot,
+        detached: process.platform !== 'win32',
         env: {
           ...process.env,
-          JAVA_TOOL_OPTIONS: '-Dfile.encoding=UTF-8 -Dsun.jnu.encoding=UTF-8'
+          JAVA_TOOL_OPTIONS: '-Dfile.encoding=UTF-8 -Dsun.jnu.encoding=UTF-8',
+          AVATAR_USER: this.account.username || '',
+          AVATAR_PASS: this.account.password || ''
         }
       });
 
+      this.child = child;
       this.startTime = Date.now();
-      const pid = this.child.pid;
+      this.lifecycleState = 'RUNNING';
+      const pid = child.pid;
       this.emitLog('info', `✅ [${this.account.username}] Bot đang chạy (PID: ${pid})`);
       this.emit('started', { accountId: this.account.id, pid });
 
@@ -320,9 +345,12 @@ class SingleBotProcess extends EventEmitter {
       this._stdoutBuffer = '';
       this._stderrBuffer = '';
 
-      // Handle STDOUT with stream line buffering
-      this.child.stdout.on('data', (chunk) => {
+      // Handle STDOUT with stream line buffering and 64KB max buffer overflow protection
+      child.stdout.on('data', (chunk) => {
         this._stdoutBuffer += chunk.toString('utf8');
+        if (this._stdoutBuffer.length > 65536) {
+          this._stdoutBuffer = this._stdoutBuffer.slice(-32768);
+        }
         const lines = this._stdoutBuffer.split('\n');
         this._stdoutBuffer = lines.pop(); // Keep incomplete trailing fragment
         for (const line of lines) {
@@ -330,9 +358,12 @@ class SingleBotProcess extends EventEmitter {
         }
       });
 
-      // Handle STDERR with stream line buffering
-      this.child.stderr.on('data', (chunk) => {
+      // Handle STDERR with stream line buffering and 64KB max buffer overflow protection
+      child.stderr.on('data', (chunk) => {
         this._stderrBuffer += chunk.toString('utf8');
+        if (this._stderrBuffer.length > 65536) {
+          this._stderrBuffer = this._stderrBuffer.slice(-32768);
+        }
         const lines = this._stderrBuffer.split('\n');
         this._stderrBuffer = lines.pop();
         for (const line of lines) {
@@ -341,7 +372,12 @@ class SingleBotProcess extends EventEmitter {
       });
 
       // Handle Exit
-      this.child.on('close', (code, signal) => {
+      child.on('close', (code, signal) => {
+        // Guard against race condition: if this.child has already been replaced by a newer spawn, do not overwrite this.child
+        if (this.child !== child) {
+          return;
+        }
+
         if (this._stdoutBuffer && this._stdoutBuffer.trim()) {
           this.processLogOutput(this._stdoutBuffer, 'stdout');
           this._stdoutBuffer = '';
@@ -366,6 +402,7 @@ class SingleBotProcess extends EventEmitter {
 
         this.child = null;
         this.startTime = null;
+        this.lifecycleState = 'STOPPED';
         this.emit('stopped', { accountId: this.account.id, code, wasManual, isTargetReached });
 
         if (!wasManual && !isTargetReached && this.globalConfig.autoRestart) {
@@ -373,13 +410,18 @@ class SingleBotProcess extends EventEmitter {
         }
       });
 
-      this.child.on('error', (err) => {
+      child.on('error', (err) => {
         this.emitLog('error', `❌ [${this.account.username}] Lỗi tiến trình bot: ${err.message}`);
-        this.emit('error', { accountId: this.account.id, error: err });
+        this.emit('process-error', { accountId: this.account.id, error: err });
+        // Only emit raw 'error' if a listener is registered to prevent unhandled error event crash in Node.js
+        if (this.listenerCount('error') > 0) {
+          this.emit('error', { accountId: this.account.id, error: err });
+        }
       });
 
       return true;
     } catch (err) {
+      this.lifecycleState = 'STOPPED';
       this.emitLog('error', `❌ [${this.account.username}] Không thể khởi chạy: ${err.message}`);
       return false;
     }
@@ -559,12 +601,23 @@ class SingleBotProcess extends EventEmitter {
       return;
     }
 
+    const MAX_RESTART_ATTEMPTS = 5;
+    if (this.restartAttempts >= MAX_RESTART_ATTEMPTS) {
+      this.emitLog('error', `🛑 [${this.account.username}] Đã đạt giới hạn tối đa ${MAX_RESTART_ATTEMPTS} lần tự khởi động lại. Dừng bot để bảo vệ hệ thống.`);
+      this.stop();
+      return;
+    }
+
     this.restartAttempts++;
-    const delay = Math.min(10000 + (this.restartAttempts * 2000), 30000);
-    this.emitLog('warn', `🔄 [${this.account.username}] Tự động khởi động lại sau ${delay / 1000}s (Lần ${this.restartAttempts})...`);
+    // Exponential backoff with jitter: 5s, 9s, 16s, 29s, capped at 30s
+    const baseDelay = Math.min(30000, 5000 * Math.pow(1.8, this.restartAttempts - 1));
+    const jitter = Math.floor(Math.random() * 2000);
+    const delay = Math.round(baseDelay + jitter);
+
+    this.emitLog('warn', `🔄 [${this.account.username}] Tự động khởi động lại sau ${(delay / 1000).toFixed(1)}s (Lần ${this.restartAttempts}/${MAX_RESTART_ATTEMPTS})...`);
 
     this.restartTimer = setTimeout(() => {
-      if (!this.isManualStop) {
+      if (!this.isManualStop && this.lifecycleState !== 'STOPPING') {
         this.start(javaBin);
       }
     }, delay);
@@ -609,27 +662,49 @@ class SingleBotProcess extends EventEmitter {
       this.loginWatchdogTimer = null;
     }
 
-    if (!this.child) {
+    if (!this.child || this.lifecycleState === 'STOPPING' || this.lifecycleState === 'STOPPED') {
+      this.lifecycleState = 'STOPPED';
       return true;
     }
 
-    const pid = this.child.pid;
+    this.lifecycleState = 'STOPPING';
+    const targetChild = this.child;
+    const pid = targetChild.pid;
     this.emitLog('system', `⏹️ [${this.account.username}] Đang dừng tiến trình bot (PID: ${pid})...`);
 
     try {
       if (process.platform === 'win32' && pid) {
         execSync(`taskkill /pid ${pid} /T /F`, { stdio: 'ignore' });
       } else if (pid) {
-        process.kill(-pid, 'SIGKILL');
+        // Unix/Linux: Try graceful SIGTERM to process group first
+        try {
+          process.kill(-pid, 'SIGTERM');
+        } catch (e) {
+          try { targetChild.kill('SIGTERM'); } catch (err) {}
+        }
+        // Forceful fallback with SIGKILL after 2500ms if still alive
+        setTimeout(() => {
+          try {
+            if (process.kill(-pid, 0)) {
+              process.kill(-pid, 'SIGKILL');
+            }
+          } catch (e) {
+            try { targetChild.kill('SIGKILL'); } catch (err) {}
+          }
+        }, 2500);
       }
     } catch (e) {
       try {
-        this.child.kill('SIGKILL');
-      } catch (err) { }
+        targetChild.kill('SIGKILL');
+      } catch (err) {}
     }
 
-    this.child = null;
-    this.startTime = null;
+    if (this.child === targetChild) {
+      this.child = null;
+      this.startTime = null;
+      this.lifecycleState = 'STOPPED';
+    }
+
     if (this.account) {
       this.account.lastAutoType = null;
     }
@@ -641,7 +716,7 @@ class SingleBotProcess extends EventEmitter {
   }
 
   getStatus() {
-    const isRunning = Boolean(this.child && !this.child.killed && this.child.exitCode === null);
+    const isRunning = Boolean(this.child && !this.child.killed && this.child.exitCode === null && this.lifecycleState === 'RUNNING');
     let uptimeSeconds = 0;
     if (isRunning && this.startTime) {
       uptimeSeconds = Math.floor((Date.now() - this.startTime) / 1000);

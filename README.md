@@ -219,10 +219,16 @@ Every mutating API endpoint (`start`, `stop`, `auto`, `setup`, `delete`, `reset`
 ### 8.1. Clone & Install Dependencies
 
 ```bash
-git clone https://github.com/hoangbmt023/auto-server-manager-avatar2d-angleChip.git
+git clone https://github.com/hoangfhisp/auto-server-manager-avatar2d-angleChip.git
 cd auto-server-manager-avatar2d-angleChip
 npm install
 ```
+
+> [!NOTE]
+> **Minimalist Zero-Bloat Dependencies:**
+> * **Frontend:** The modern dashboard is built with React 18 and Babel loaded via high-speed CDN directly in `public/index.html`. This eliminates complex Webpack/Vite frontend builds and keeps disk usage extremely low on constrained cPanel hosting.
+> * **Payment Engine:** The payOS VietQR integration is implemented with **zero external npm dependencies**, utilizing Node.js native `https` and `crypto` modules with built-in 10-second socket timeouts and constant-time signature verification.
+> * **Process Bootstrappers:** `app.js` is the entrypoint required by cPanel Phusion Passenger, while `server.js` is used for standalone VPS and local development. Both delegate execution to `src/interfaces/http/HttpServer.js`.
 
 ### 8.2. Configure Environment (`.env`)
 

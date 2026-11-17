@@ -56,3 +56,6 @@ tmp/
 !templates/
 *.class.txt
 *_disasm.txt
+
+# Graphify Generated Artifacts & Cache
+graphify-out/

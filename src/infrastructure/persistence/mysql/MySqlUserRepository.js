@@ -40,9 +40,9 @@ class MySqlUserRepository extends IUserRepository {
     });
   }
 
-  async findById(id) {
+  async findById(id, connection = null) {
     if (!id) return null;
-    const db = this._getDb();
+    const db = this._getDb(connection);
     const [row] = await db.select().from(users).where(eq(users.id, id)).limit(1);
     return this._mapRowToEntity(row);
   }
