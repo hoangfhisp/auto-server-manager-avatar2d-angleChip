@@ -21,7 +21,7 @@
     "emulator",
     "bot"
   ],
-  "author": "Antigravity",
+  "author": "hoangfhisp",
   "license": "MIT",
   "dependencies": {
     "bcryptjs": "^3.0.3",
