@@ -196,4 +196,37 @@ describe('Core Hardening & Reliability Tests', () => {
     });
   });
 
+  describe('Security & Parser Hardening', () => {
+    const { parseJsonBody } = require('../src/interfaces/http/middlewares');
+    const { Readable } = require('stream');
+
+    it('sanitizes prototype pollution keys and enforces payload size without ReferenceError', async () => {
+      const stream = new Readable();
+      stream.push('{"__proto__":{"polluted":true},"valid":"ok"}');
+      stream.push(null);
+
+      const parsed = await parseJsonBody(stream);
+      assert.strictEqual(parsed.valid, 'ok');
+      assert.strictEqual(parsed.polluted, undefined);
+      assert.strictEqual(Object.prototype.polluted, undefined);
+    });
+
+    it('rejects oversized payload with clean BadRequestException instead of ReferenceError', async () => {
+      const stream = new Readable();
+      stream.push('a'.repeat(200));
+      stream.push(null);
+
+      await assert.rejects(
+        async () => {
+          await parseJsonBody(stream, 100); // 100 bytes limit
+        },
+        (err) => {
+          assert.strictEqual(err.name, 'BadRequestException');
+          assert.ok(err.message.includes('Dung lượng gửi lên quá lớn'));
+          return true;
+        }
+      );
+    });
+  });
+
 });
