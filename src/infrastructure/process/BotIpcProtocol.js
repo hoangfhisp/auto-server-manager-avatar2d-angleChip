@@ -57,7 +57,6 @@ class BotIpcProtocol {
       accountStatusUpdate: null,
       autoStatusUpdate: null,
       statsUpdate: null,
-      eventStatusUpdate: null,
       proxyExpiredReason: null,
       shouldCheckProxyHealth: false,
       loginWatchdogAction: null, // 'reset', 'clear', or null
@@ -73,7 +72,7 @@ class BotIpcProtocol {
     const currentAutoState = context.autoState || {};
     const currentStats = context.playerStats || {};
     const hasProxy = Boolean(context.proxyId);
-    // 0. LỌC BỎ NGAY TẠI NGUỒN (Ingress Filtering): Toàn bộ rác kỹ thuật giả lập microemu, bytecode & stacktraces
+    // 0. Filter out internal proxy setup, sensitive connection logs, settings loading, and emulator bootstrap
     if (
       line.includes('[PROXY SETUP]') ||
       line.includes('[GIẢ LẬP ANGELCHIP]') ||
@@ -90,16 +89,7 @@ class BotIpcProtocol {
       line.includes('headless arguments') ||
       line.includes('openJar') ||
       line.includes('loadJar') ||
-      line.includes('loadClass') ||
-      /^[=\-─_]{8,}/.test(line) ||
-      /(\[.*?\]\s*)?(index|readMapItem|doGetHandler|addElement):\s*\d*/i.test(line) ||
-      /\(null:-1\)/i.test(line) ||
-      /:\s*-1\)/i.test(line) ||
-      /^\t|\s{2,}(at |org\.|com\.|javax?\.|sun\.|[a-zA-Z0-9_$]+\.[a-zA-Z0-9_$]+)/.test(line) ||
-      /at java\.|at javax\.|at com\.|at org\./i.test(line) ||
-      /Exception in thread|java\.lang\.|java\.io\.|java\.net\.|EOFException|SocketException/i.test(line) ||
-      /RecordStoreImpl|Font:|Graphics|MIDlet|UnsatisfiedLinkError|\[B@|\[C@|DeviceDisplay/i.test(line) ||
-      /\[TXR\]|TxRunner|\[CG\]|CoGiao|Bridge\.hidden|\[POP\]\s*hidden popup/i.test(line)
+      /^[=\-─_]{8,}/.test(line)
     ) {
       result.handledSpecialPacket = true;
       return result;
@@ -116,7 +106,7 @@ class BotIpcProtocol {
         if (parsed.isTargetReached || parsed.isCompleted || parsed.state === 'target_reached') {
           result.isTargetReached = true;
         }
-      } catch (e) { }
+      } catch (e) {}
       return result;
     }
 
@@ -139,13 +129,13 @@ class BotIpcProtocol {
           autoType: primaryType,
           subTask: subTask
         };
-      } catch (e) { }
+      } catch (e) {}
       return result;
     }
 
     // 3. Farm Finished Text Line
     if ((line.includes('Đã chăm sóc xong') || line.includes('Đã xong việc') || line.includes('Nông trại bạn đã được chăm sóc')) &&
-      (!currentAutoState || currentAutoState.autoType === 'farm')) {
+        (!currentAutoState || currentAutoState.autoType === 'farm')) {
       result.autoStatusUpdate = {
         isRunning: false,
         autoType: 'farm',
@@ -174,9 +164,9 @@ class BotIpcProtocol {
           delete parsed.lockedGold;
         }
         if ((!parsed.farmingCountdown || parsed.farmingCountdown === '--:--') &&
-          (currentStats.farmingCountdown && currentStats.farmingCountdown !== '--:--') &&
-          currentAutoState && currentAutoState.isRunning &&
-          (currentAutoState.autoType === 'diamond' || currentAutoState.autoType === 'kc' || currentAutoState.autoType === 'fish')) {
+            (currentStats.farmingCountdown && currentStats.farmingCountdown !== '--:--') &&
+            currentAutoState && currentAutoState.isRunning &&
+            (currentAutoState.autoType === 'diamond' || currentAutoState.autoType === 'kc' || currentAutoState.autoType === 'fish')) {
           delete parsed.farmingCountdown;
           delete parsed.farmingTime;
         }
@@ -190,7 +180,7 @@ class BotIpcProtocol {
             let subTask = null;
 
             if ((parsed.autoType === 'farm' || parsed.autoType === 'sell_ore' || parsed.autoType === 'banda' || parsed.autoType === 'stone' || parsed.autoType === 'baby') &&
-              currentAutoState && (currentAutoState.autoType === 'diamond' || currentAutoState.autoType === 'fish' || currentAutoState.autoType === 'kc')) {
+                currentAutoState && (currentAutoState.autoType === 'diamond' || currentAutoState.autoType === 'fish' || currentAutoState.autoType === 'kc')) {
               primaryType = currentAutoState.autoType;
               subTask = parsed.autoType;
             }
@@ -232,26 +222,13 @@ class BotIpcProtocol {
             isMaintenance: false
           };
         }
-      } catch (e) { }
-      return result;
-    }
-
-    // 4.1. Game Event Progress Packet
-    if (line.includes('[EVENT_STATUS]:')) {
-      result.handledSpecialPacket = true;
-      try {
-        const jsonPart = line.substring(line.indexOf('[EVENT_STATUS]:') + 15).trim();
-        const parsed = JSON.parse(jsonPart);
-        result.eventStatusUpdate = parsed;
-      } catch (e) { }
+      } catch (e) {}
       return result;
     }
 
     // 5. Standard Log Classification & Error Detection
     let type = streamType === 'stderr' ? 'error' : 'stdout';
-    if (line.includes('🎁') || line.includes('[SỰ KIỆN')) {
-      type = 'event';
-    } else if (line.includes('✅') || line.includes('THÀNH CÔNG')) {
+    if (line.includes('✅') || line.includes('THÀNH CÔNG')) {
       type = 'success';
     } else if (line.includes('❌') || line.includes('LỖI')) {
       type = 'error';
@@ -304,9 +281,7 @@ class BotIpcProtocol {
         isError: false,
         isMaintenance: true
       };
-    } else if (line.includes('⏳') || line.includes('CHỜ KẾT NỐI LẠI')) {
-      type = 'warn';
-    } else if (line.includes('🔄') || line.includes('TỰ ĐỘNG ĐĂNG NHẬP LẠI') || line.includes('🚀') || line.includes('QUY TRÌNH') || line.includes('Đang kết nối') || line.includes('📡') || line.includes('🗺️') || line.includes('CHUYỂN MAP') || line.includes('GIỮ KẾT NỐI')) {
+    } else if (line.includes('🚀') || line.includes('QUY TRÌNH') || line.includes('Đang kết nối')) {
       type = 'info';
     }
 

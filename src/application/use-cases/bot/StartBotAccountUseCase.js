@@ -4,7 +4,6 @@ const ServerLimitRule = require('../../../domain/rules/ServerLimitRule');
 const ProxyChecker = require('../../../infrastructure/network/ProxyChecker');
 const ProcessRegistry = require('../../../infrastructure/process/ProcessRegistry');
 const { BadRequestException, NotFoundException } = require('../../../domain/errors');
-const { formatLogTimestamp } = require('../../../shared/utils/formatters');
 
 /**
  * StartBotAccountUseCase (Application Layer - Use Case)
@@ -28,7 +27,7 @@ class StartBotAccountUseCase {
     this.allocationEngine = engine;
   }
 
-  async execute(accountId, options = {}) {
+  async execute(accountId) {
     if (this.startingLocks.has(accountId)) {
       return { success: true, message: `Tài khoản đang trong tiến trình khởi chạy, xin chờ...` };
     }
@@ -93,7 +92,7 @@ class StartBotAccountUseCase {
         throw new BadRequestException(`Tài khoản bot [${account.username}] đã hết hạn thuê! Vui lòng gia hạn để tiếp tục chạy.`);
       }
 
-      const isCustomerRental = Boolean(account.rentalPlan);
+      const isCustomerRental = Boolean(account.userId || account.rentalExpiresAt);
       let proxy = null;
 
       // 5.1 ĐẢM BẢO PROXY SỐNG KHẢ DỤNG QUA RESOURCE ALLOCATION ENGINE (CLEAN ARCHITECTURE)
@@ -151,24 +150,8 @@ class StartBotAccountUseCase {
       } catch (e) {}
     }
 
-    // Xóa cờ pendingReset trong Database ngay khi chuẩn bị chạy bot (chỉ chạy 1 lần duy nhất)
-    if (account.pendingReset) {
-      const needReset = true;
-      account.pendingReset = false;
-      await this.accountRepo.save(account);
-      account.pendingReset = needReset; // Truyền cờ sang SingleBotProcess cho phiên chạy này
-    }
-
     // 8. Instantiate SingleBotProcess with injected Proxy entity
     const botProcess = new SingleBotProcess(account, fileProfile, config, proxy);
-    if (options && options.restoreAutoType) {
-      botProcess.autoState = {
-        isRunning: true,
-        autoType: options.restoreAutoType,
-        status: 'running',
-        message: `Khôi phục ${botProcess.getFriendlyName(options.restoreAutoType)}...`
-      };
-    }
 
     botProcess.on('log', (entry) => {
       this.sseEventBus.addLog(entry);
@@ -187,41 +170,15 @@ class StartBotAccountUseCase {
     botProcess.on('auto-status', (data) => {
       this.multiBotManager.processRegistry.update(accountId, { autoState: data.autoState });
       this.sseEventBus.broadcast('bot-auto-status', data);
-      if (data.autoState) {
-        if (data.autoState.isRunning && data.autoState.autoType && !data.autoState.subTask) {
-          this.multiBotManager.persistAutoState(accountId, data.autoState.autoType).catch(() => {});
-        } else if (data.autoState.status === 'finished' || data.autoState.finished || (!data.autoState.isRunning && data.autoState.status === 'idle')) {
-          this.multiBotManager.persistAutoState(accountId, null).catch(() => {});
-        }
-      }
-    });
-
-    botProcess.on('event-status', (data) => {
-      this.multiBotManager.processRegistry.update(accountId, { eventState: data.eventState });
-      this.sseEventBus.broadcast('bot-event-status', data);
     });
 
     botProcess.on('proxy-expired', async ({ proxyId, reason }) => {
       await this.multiBotManager.markProxyExpired(proxyId, reason, accountId);
     });
 
-    botProcess.on('process-error', (errData) => {
-      this.sseEventBus.addLog({
-        timestamp: formatLogTimestamp(),
-        type: 'error',
-        accountId,
-        text: `❌ Lỗi tiến trình bot: ${errData.error?.message || errData.error}`
-      });
-    });
-
-    botProcess.on('error', (errData) => {
-      // Guard against unhandled error event crashes in Node.js
-      console.warn(`[StartBotAccountUseCase] Bot process error event [${accountId}]:`, errData);
-    });
-
-    botProcess.on('stopped', async ({ accountId: stoppedId, wasManual, isTargetReached }) => {
+    botProcess.on('stopped', async ({ accountId: stoppedId, wasManual }) => {
       this.multiBotManager.processRegistry.unregister(stoppedId);
-      if (wasManual || isTargetReached) {
+      if (wasManual) {
         this.multiBotManager.runningBots.delete(stoppedId);
         await this.multiBotManager.persistRunningState();
       }

@@ -46,9 +46,8 @@ window.FileTabsBar = function FileTabsBar({
                   <span>•</span>
                   <span>DK: {dkOnline}/3</span>
                   {totalOnline > 0 && (
-                    <span className="file-tab-online-highlight" style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                      <window.Icon name="flame" size={11} color="#ff9500" />
-                      <span>{totalOnline}</span>
+                    <span className="file-tab-online-highlight">
+                      🔥 {totalOnline}
                     </span>
                   )}
                 </div>

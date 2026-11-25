@@ -4,7 +4,6 @@ const CrossProcessBus = require('../../infrastructure/ipc/CrossProcessBus');
 const StartBotAccountUseCase = require('../use-cases/bot/StartBotAccountUseCase');
 const StopBotAccountUseCase = require('../use-cases/bot/StopBotAccountUseCase');
 const { DateTimeUtil } = require('../../shared/utils/dateTime');
-const { formatLogTimestamp } = require('../../shared/utils/formatters');
 const ProxyChecker = require('../../infrastructure/network/ProxyChecker');
 
 /**
@@ -24,7 +23,6 @@ class MultiBotManager extends EventEmitter {
     this.proxyVnApiClient = null;
 
     this.runningBots = new Map(); // Local worker Map: accountId -> SingleBotProcess
-    this.runningAutoMap = new Map(); // accountId -> active autoType (persisted across server restarts)
     this.processRegistry = new ProcessRegistry();
     this.ipcBus = sseEventBus && sseEventBus.getIpcBus ? sseEventBus.getIpcBus() : new CrossProcessBus();
 
@@ -103,8 +101,8 @@ class MultiBotManager extends EventEmitter {
     return runningAccs.filter(a => (a.fileId || 'file_1') === fileId);
   }
 
-  async startAccount(accountId, options = {}) {
-    return this.startBotUseCase.execute(accountId, options);
+  async startAccount(accountId) {
+    return this.startBotUseCase.execute(accountId);
   }
 
   async stopAccount(accountId) {
@@ -145,7 +143,6 @@ class MultiBotManager extends EventEmitter {
       this.processRegistry.unregister(accId);
     }
     this.runningBots.clear();
-    this.runningAutoMap.clear();
 
     // 2. Stop all remote processes in registry
     const activeBots = this.processRegistry.getActiveBots();
@@ -158,7 +155,6 @@ class MultiBotManager extends EventEmitter {
     }
 
     await this.persistRunningState();
-    await this.persistAllAutoStates();
 
     this.sseEventBus.addLog({
       type: 'warn',
@@ -170,31 +166,6 @@ class MultiBotManager extends EventEmitter {
     });
 
     return { success: true, message: 'Đã dừng tất cả bot.' };
-  }
-
-  async persistAllAutoStates() {
-    if (!this.settingRepo) return;
-    try {
-      const obj = {};
-      for (const [accId, autoType] of this.runningAutoMap.entries()) {
-        if (autoType) obj[accId] = autoType;
-      }
-      await this.settingRepo.set('runningAutoStates', obj);
-    } catch (e) {
-      console.error('Error persisting running auto states to MySQL:', e.message);
-    }
-  }
-
-  async persistAutoState(accountId, autoType) {
-    if (!accountId) return;
-    if (autoType) {
-      if (this.runningAutoMap.get(accountId) === autoType) return;
-      this.runningAutoMap.set(accountId, autoType);
-    } else {
-      if (!this.runningAutoMap.has(accountId)) return;
-      this.runningAutoMap.delete(accountId);
-    }
-    await this.persistAllAutoStates();
   }
 
   async persistRunningState() {
@@ -231,24 +202,11 @@ class MultiBotManager extends EventEmitter {
         return;
       }
 
-      // Khôi phục danh sách Auto đang chạy trước khi server tắt/lỗi
-      let savedAutoStates = {};
-      try {
-        const rawAutoStates = await this.settingRepo.get('runningAutoStates');
-        if (rawAutoStates && typeof rawAutoStates === 'object') {
-          savedAutoStates = rawAutoStates;
-          for (const [accId, autoType] of Object.entries(savedAutoStates)) {
-            if (autoType) this.runningAutoMap.set(accId, autoType);
-          }
-        }
-      } catch (e) {}
-
       console.log(`🤖 Tự động khôi phục treo ${idList.length} tài khoản Avatar từ MySQL...`);
       for (const accId of idList) {
         try {
           if (!this.isAccountRunning(accId)) {
-            const restoreAutoType = savedAutoStates[accId] || null;
-            await this.startAccount(accId, { restoreAutoType });
+            await this.startAccount(accId);
           }
         } catch (err) {
           console.error(`❌ Không thể khôi phục tài khoản [${accId}]:`, err.message);
@@ -328,10 +286,6 @@ class MultiBotManager extends EventEmitter {
       };
     }
 
-    if (ok) {
-      this.persistAutoState(accountId, action === 'start' ? autoType : null).catch(() => {});
-    }
-
     return {
       success: ok,
       message: ok 
@@ -405,7 +359,7 @@ class MultiBotManager extends EventEmitter {
           } catch (e) {}
         }
         this.sseEventBus.addLog({
-          timestamp: formatLogTimestamp(),
+          timestamp: new Date().toLocaleTimeString('vi-VN', { hour12: false }),
           type: 'error',
           accountId: accountId,
           username,
@@ -432,7 +386,7 @@ class MultiBotManager extends EventEmitter {
 
       if (this.sseEventBus) {
         this.sseEventBus.addLog({
-          timestamp: formatLogTimestamp(),
+          timestamp: new Date().toLocaleTimeString('vi-VN', { hour12: false }),
           type: 'warn',
           accountId: accountId,
           username: '',

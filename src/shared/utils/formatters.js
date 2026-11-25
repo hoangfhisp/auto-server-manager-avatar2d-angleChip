@@ -90,17 +90,10 @@ function formatDateTime(dateInput) {
   return `${parts.hour}:${parts.minute}:${parts.second} ${parts.day}/${parts.month}/${parts.year}`;
 }
 
-function formatLogTimestamp(dateInput = new Date()) {
-  const parts = getVnParts(dateInput);
-  if (!parts) return '';
-  return `${parts.day}/${parts.month} ${parts.hour}:${parts.minute}:${parts.second}`;
-}
-
 module.exports = {
   formatMoney,
   formatNumber,
   formatDate,
   formatTime,
-  formatDateTime,
-  formatLogTimestamp
+  formatDateTime
 };

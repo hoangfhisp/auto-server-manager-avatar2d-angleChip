@@ -400,8 +400,22 @@ class AccountService {
     RmsWriter.resetUpThueRms(targetAcc, activeFileId);
 
     if (this.multiBotManager && this.multiBotManager.isAccountRunning(accountId)) {
-      this.multiBotManager.applySetupToBot(accountId, 0, 0);
       this.multiBotManager.resetBotData(accountId);
+    } else {
+      try {
+        const fs = require('fs');
+        const path = require('path');
+        const safeAppId = `avatar_${targetAcc.username || targetAcc.id}_${activeFileId || 'def'}`;
+        const rmsDir = path.resolve(__dirname, '../../../.microemulator', `suite-${safeAppId}`);
+        if (fs.existsSync(rmsDir)) {
+          const files = fs.readdirSync(rmsDir);
+          for (const file of files) {
+            if (file.toLowerCase().includes('data') || file.toLowerCase().includes('coin')) {
+              try { fs.unlinkSync(path.join(rmsDir, file)); } catch (e) {}
+            }
+          }
+        }
+      } catch (e) {}
     }
 
     return { success: true, message: `Đã reset dữ liệu up thuê cho tài khoản [${targetAcc.username}].` };

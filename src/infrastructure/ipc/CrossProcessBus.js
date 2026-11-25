@@ -1,7 +1,6 @@
 const fs = require('fs');
 const path = require('path');
 const EventEmitter = require('events');
-const { formatLogTimestamp } = require('../../shared/utils/formatters');
 
 /**
  * CrossProcessBus (Infrastructure / IPC Layer)
@@ -22,7 +21,6 @@ class CrossProcessBus extends EventEmitter {
     this.lastCommandOffset = 0;
     this.pollInterval = null;
     this.seenEventIds = new Set();
-    this.seenCommandIds = new Set();
     this.maxMemoryLogs = 500;
     this.localLogCache = [];
     this.maxAccountLogs = 1000;
@@ -67,19 +65,7 @@ class CrossProcessBus extends EventEmitter {
           for (const line of lines.slice(-this.maxMemoryLogs)) {
             if (!line.trim()) continue;
             try {
-              const entry = JSON.parse(line);
-              this.localLogCache.push(entry);
-
-              // Index sẵn vào accountLogsMap để tra cứu O(1) tức thì ngay cả sau khi restart
-              const accKey = entry.accountId ? String(entry.accountId) : (entry.username ? String(entry.username) : null);
-              if (accKey) {
-                if (!this.accountLogsMap.has(accKey)) {
-                  this.accountLogsMap.set(accKey, []);
-                }
-                const aLogs = this.accountLogsMap.get(accKey);
-                aLogs.push(entry);
-                if (aLogs.length > this.maxAccountLogs) aLogs.shift();
-              }
+              this.localLogCache.push(JSON.parse(line));
             } catch (e) {}
           }
         }
@@ -93,25 +79,17 @@ class CrossProcessBus extends EventEmitter {
       this.pollNewEvents();
       this.pollNewCommands();
     }, 80);
-    if (this.pollInterval && this.pollInterval.unref) {
-      this.pollInterval.unref();
-    }
 
-    this.fileWatchers = [];
     // Also watch files directly for zero-latency notification
     try {
       if (fs.existsSync(this.eventsFile)) {
-        const w = fs.watch(this.eventsFile, () => this.pollNewEvents());
-        if (w && w.unref) w.unref();
-        this.fileWatchers.push(w);
+        fs.watch(this.eventsFile, () => this.pollNewEvents());
       }
     } catch (e) {}
 
     try {
       if (fs.existsSync(this.commandsFile)) {
-        const w = fs.watch(this.commandsFile, () => this.pollNewCommands());
-        if (w && w.unref) w.unref();
-        this.fileWatchers.push(w);
+        fs.watch(this.commandsFile, () => this.pollNewCommands());
       }
     } catch (e) {}
   }
@@ -121,16 +99,6 @@ class CrossProcessBus extends EventEmitter {
       clearInterval(this.pollInterval);
       this.pollInterval = null;
     }
-    if (this.fileWatchers) {
-      for (const w of this.fileWatchers) {
-        try { w.close(); } catch (e) {}
-      }
-      this.fileWatchers = [];
-    }
-  }
-
-  destroy() {
-    this.stopWatcher();
   }
 
   /**
@@ -167,7 +135,7 @@ class CrossProcessBus extends EventEmitter {
   publishLog(logEntry) {
     this.ensureDir();
     const formatted = {
-      timestamp: logEntry.timestamp || formatLogTimestamp(),
+      timestamp: logEntry.timestamp || new Date().toLocaleTimeString('vi-VN', { hour12: false }),
       type: logEntry.type || 'stdout',
       accountId: logEntry.accountId || null,
       username: logEntry.username || null,
@@ -200,10 +168,7 @@ class CrossProcessBus extends EventEmitter {
 
     try {
       fs.appendFileSync(this.logsFile, JSON.stringify(formatted) + '\n', 'utf8');
-      this.logWriteCounter = (this.logWriteCounter || 0) + 1;
-      if (this.logWriteCounter % 50 === 0) {
-        this.checkRotateLogsFile();
-      }
+      this.checkRotateLogsFile();
     } catch (e) {}
 
     this.publishEvent('log', formatted);

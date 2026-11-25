@@ -45,7 +45,7 @@ class RentSlotUseCase {
     });
   }
 
-  async _executeInternal({ userId, username, password, serverId = null, plan = 'UPXU', durationMonths = 1, voucherCode = null, note = '' }) {
+  async _executeInternal({ userId, username, password, plan = 'UPXU', durationMonths = 1, voucherCode = null, note = '' }) {
     if (!userId) {
       throw new BadRequestException('Vui lòng đăng nhập để thuê nick bot!');
     }
@@ -54,46 +54,7 @@ class RentSlotUseCase {
       throw new BadRequestException('Tên tài khoản game không được để trống!');
     }
 
-    // 1. Kiểm tra tài khoản trong hệ thống (bao gồm cả tài khoản đã xóa mềm)
-    const existing = await this.accountRepo.findByUsername(cleanUsername, true);
-    let isReactivation = false;
-    let isTransferToNewUser = false;
 
-    if (existing) {
-      const isDeleted = typeof existing.isDeleted === 'function' ? existing.isDeleted() : Boolean(existing.deletedAt);
-      const isExpired = typeof existing.isRentalExpired === 'function' ? existing.isRentalExpired() : (existing.rentalExpiresAt && new Date(existing.rentalExpiresAt).getTime() < Date.now());
-      const daysExpired = typeof existing.getDaysExpired === 'function' ? existing.getDaysExpired() : (isExpired ? Math.floor((Date.now() - new Date(existing.rentalExpiresAt).getTime()) / (24 * 3600 * 1000)) : 0);
-
-      // TRƯỜNG HỢP 1: Nick đang hoạt động (chưa xóa) và VẪN CÒN HẠN
-      if (!isDeleted && !isExpired) {
-        if (existing.userId === userId) {
-          throw new BadRequestException(
-            `Tài khoản bot [${cleanUsername}] đang hoạt động bình thường trên hệ thống. Vui lòng vào danh sách tài khoản để bấm "Gia hạn" thay vì thuê mới!`
-          );
-        } else {
-          throw new BadRequestException(`Tài khoản game [${cleanUsername}] đang có người khác thuê và đang hoạt động!`);
-        }
-      }
-
-      // TRƯỜNG HỢP 2: Nick chưa bấm xóa nhưng mới hết hạn DƯỚI 3 NGÀY (Thời gian ân hạn)
-      if (!isDeleted && isExpired && daysExpired < 3) {
-        if (existing.userId !== userId) {
-          throw new BadRequestException(
-            `Tài khoản [${cleanUsername}] đang trong 3 ngày chờ chủ cũ gia hạn. Nếu bạn là chủ mới của nick, vui lòng nhắn chủ cũ bấm "Xóa nick" trên web để thuê ngay!`
-          );
-        }
-        isReactivation = true;
-      }
-
-      // TRƯỜNG HỢP 3: Nick ĐÃ BẤM XÓA HOẶC ĐÃ HẾT HẠN >= 3 NGÀY
-      if (isDeleted || (isExpired && daysExpired >= 3)) {
-        if (existing.userId === userId) {
-          isReactivation = true;
-        } else {
-          isTransferToNewUser = true;
-        }
-      }
-    }
 
     // 2. Fetch User & check status
     const user = await this.userRepo.findById(userId);
@@ -158,7 +119,7 @@ class RentSlotUseCase {
       // =======================================================================
       let allocation = null;
       try {
-        const targetServerId = (serverId !== null && serverId !== undefined) ? parseInt(serverId, 10) : (existing ? existing.serverId : null);
+        const targetServerId = existing ? existing.serverId : null;
         allocation = await this.allocationEngine.allocateResources(planKey, months, targetServerId);
       } catch (allocErr) {
         console.error('❌ [RentSlotUseCase] Cấp phát Proxy/File thất bại:', allocErr.message);
@@ -197,86 +158,26 @@ class RentSlotUseCase {
       }
 
       const now = Date.now();
-      let expiresAt;
-      let accountResult = null;
-      let newEffectivePriceMonth;
+      // TẠO SLOT MỚI HOÀN TOÀN (Mô hình Slot Thuần Túy)
+      const expiresAt = new Date(now + months * 30 * 24 * 60 * 60 * 1000);
+      const newEffectivePriceMonth = Math.round(finalPrice / months);
+      const newAccount = new Account({
+        userId,
+        username: cleanUsername,
+        password: password || '',
+        serverId: allocation.serverId,
+        serverName: allocation.serverName,
+        fileId: allocation.fileId,
+        proxyId: allocation.proxyId,
+        note: note || `Thuê gói ${planConfig.name} (${months}T)`,
+        rentalExpiresAt: expiresAt,
+        rentalPlan: planKey,
+        effectivePriceMonth: newEffectivePriceMonth,
+        isEmergencySlot: false
+      });
 
-      if (isReactivation && existing) {
-        // CHÍNH CHỦ CŨ KHÔI PHỤC LẠI NICK
-        // Tài khoản đã từng bị hủy/xóa (đã hoàn tiền) hoặc đã hết hạn: thời hạn mới luôn tính từ thời điểm hiện tại
-        expiresAt = new Date(now + months * 30 * 24 * 60 * 60 * 1000);
-        newEffectivePriceMonth = Math.round(finalPrice / months);
-
-        existing.deletedAt = null;
-        existing.userId = userId;
-        existing.rentalPlan = planKey;
-        existing.rentalExpiresAt = expiresAt;
-        existing.effectivePriceMonth = newEffectivePriceMonth;
-        existing.proxyId = allocation.proxyId;
-        if (allocation.fileId) existing.fileId = allocation.fileId;
-        if (allocation.serverId !== undefined) existing.serverId = allocation.serverId;
-        if (allocation.serverName) existing.serverName = allocation.serverName;
-        if (password) existing.password = password;
-        if (note) existing.note = note;
-        // Bắt đầu chu kỳ thuê mới: reset createdAt để áp dụng chuẩn quy tắc minHoldHours chống spam đổi IP proxy
-        existing.createdAt = new Date(now);
-        existing.updatedAt = new Date(now);
-        // Bảo lưu nguyên vẹn 100% cấu hình bot (farmSettings, diamondSettings, fishSettings, sellOreSettings)
-
-        await this.accountRepo.save(existing);
-        accountResult = existing;
-      } else if (isTransferToNewUser && existing) {
-        // SANG TÊN ĐỔI CHỦ CHO USER MỚI (Sau khi chủ cũ bấm Xóa hoặc quá 3 ngày ân hạn)
-        if (this.multiBotManager) {
-          try { await this.multiBotManager.stopAccount(existing.id); } catch (e) {}
-        }
-        try {
-          const allAccounts = await this.accountRepo.findAll();
-          RmsWriter.cleanAccountRmsDirs(existing, allAccounts);
-        } catch (e) {}
-
-        expiresAt = new Date(now + months * 30 * 24 * 60 * 60 * 1000);
-        newEffectivePriceMonth = Math.round(finalPrice / months);
-
-        existing.userId = userId;
-        existing.deletedAt = null;
-        existing.password = password || '';
-        existing.rentalPlan = planKey;
-        existing.rentalExpiresAt = expiresAt;
-        existing.effectivePriceMonth = newEffectivePriceMonth;
-        existing.proxyId = allocation.proxyId;
-        if (allocation.fileId) existing.fileId = allocation.fileId;
-        if (allocation.serverId !== undefined) existing.serverId = allocation.serverId;
-        if (allocation.serverName) existing.serverName = allocation.serverName;
-        existing.createdAt = new Date(now);
-        existing.updatedAt = new Date(now);
-        existing.resetBotConfigurations();
-        if (note) existing.note = note;
-
-        await this.accountRepo.save(existing);
-        accountResult = existing;
-      } else {
-        // TẠO NICK MỚI HOÀN TOÀN
-        expiresAt = new Date(now + months * 30 * 24 * 60 * 60 * 1000);
-        newEffectivePriceMonth = Math.round(finalPrice / months);
-        const newAccount = new Account({
-          userId,
-          username: cleanUsername,
-          password: password || '',
-          serverId: allocation.serverId,
-          serverName: allocation.serverName,
-          fileId: allocation.fileId,
-          proxyId: allocation.proxyId,
-          note: note || `Thuê gói ${planConfig.name} (${months}T)`,
-          rentalExpiresAt: expiresAt,
-          rentalPlan: planKey,
-          effectivePriceMonth: newEffectivePriceMonth,
-          isEmergencySlot: false
-        });
-
-        await this.accountRepo.save(newAccount);
-        accountResult = newAccount;
-      }
+      await this.accountRepo.save(newAccount);
+      const accountResult = newAccount;
 
       return {
         account: accountResult.toPublicJson(),
@@ -416,7 +317,7 @@ class RentSlotUseCase {
 
       if (needsNewAllocation) {
         console.log(`🔀 [RentSlotUseCase] Cấp phát lại tài nguyên cho [${account.username}] (Đổi gói hoặc đổi Proxy)...`);
-        const allocation = await this.allocationEngine.allocateResources(targetPlanKey, newExpiresAt, account.serverId);
+        const allocation = await this.allocationEngine.allocateResources(targetPlanKey, months, account.serverId);
         account.proxyId = allocation.proxyId;
         if (allocation.fileId) account.fileId = allocation.fileId;
         if (this.multiBotManager && this.multiBotManager.isAccountRunning(account.id)) {

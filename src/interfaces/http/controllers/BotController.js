@@ -296,9 +296,7 @@ class BotController {
   }
 
   async getLogs(req, res, sendJson) {
-    const rawLogs = this.sseEventBus.getLogs ? this.sseEventBus.getLogs() : (this.sseEventBus.logs || []);
-    // Tối ưu hóa phản hồi: Trả về 300 dòng log sạch mới nhất
-    const logs = rawLogs.length > 300 ? rawLogs.slice(-300) : rawLogs;
+    const logs = this.sseEventBus.getLogs ? this.sseEventBus.getLogs() : (this.sseEventBus.logs || []);
     return sendJson(res, 200, {
       success: true,
       logs

@@ -7,7 +7,6 @@
     "start": "node server.js",
     "dev": "node -e \"process.env.NODE_ENV='development'; require('./server');\"",
     "prod": "node -e \"process.env.NODE_ENV='production'; require('./server');\"",
-    "test": "node --test test/**/*.test.js",
     "build:java": "node java-engine/build.js",
     "audit:rms": "node -e \"const ConfigRepo = require('./src/infrastructure/persistence/ConfigRepository'); const RmsAuditService = require('./src/application/services/RmsAuditService'); const auditor = new RmsAuditService(new ConfigRepo()); console.log(JSON.stringify(auditor.auditAllAccounts(), null, 2));\"",
     "db:push": "drizzle-kit push --config=config/drizzle.config.js",
@@ -21,7 +20,7 @@
     "emulator",
     "bot"
   ],
-  "author": "hoangfhisp",
+  "author": "Antigravity",
   "license": "MIT",
   "dependencies": {
     "bcryptjs": "^3.0.3",

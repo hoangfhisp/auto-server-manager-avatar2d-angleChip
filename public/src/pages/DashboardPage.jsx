@@ -334,14 +334,7 @@ window.DashboardPage = function DashboardPage() {
                     {activeFile?.name || 'File Bot'}
                   </h3>
                   <span className="sidebar-sub main-pane-sub">
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                      <window.Icon
-                        name={activeFile?.modType === 'chipmix' ? 'zap' : activeFile?.modType === 'fish' ? 'fish' : 'gem'}
-                        size={12}
-                        color={activeFile?.modType === 'chipmix' ? 'var(--apple-purple)' : activeFile?.modType === 'fish' ? 'var(--apple-teal)' : 'var(--apple-blue)'}
-                      />
-                      <span>{activeFile?.modType === 'chipmix' ? 'Bản ChipMix Full' : activeFile?.modType === 'fish' ? 'Auto Câu Cá' : 'Auto Kim Cương'}</span>
-                    </span>
+                    <span>{activeFile?.modType === 'chipmix' ? '⚡ Bản ChipMix Full' : activeFile?.modType === 'fish' ? '🎣 Auto Câu Cá' : '💎 Auto Kim Cương'}</span>
                     <span>•</span>
                     <span>Tổng: <strong className="text-primary">{fileAccounts.length}/{fileMaxAccounts}</strong> nick</span>
                     <span>•</span>

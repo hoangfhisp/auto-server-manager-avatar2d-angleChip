@@ -42,7 +42,7 @@ function parseJsonBody(req, customMaxSizeBytes = null) {
     req.on('data', chunk => {
       size += chunk.length;
       if (size > maxSizeBytes) {
-        req.destroy(new BadRequestException(`Dung lượng gửi lên quá lớn (Tối đa ${maxMb}MB)!`));
+        req.destroy(new BadRequestException(`Dung lượng gửi lên quá lớn (Tối đa ${envMb}MB)!`));
         return;
       }
       body += chunk.toString('utf8');

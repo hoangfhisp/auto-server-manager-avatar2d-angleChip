@@ -4,7 +4,6 @@ const fs = require('fs');
 const EventEmitter = require('events');
 const ProxyChecker = require('../network/ProxyChecker');
 const BotIpcProtocol = require('./BotIpcProtocol');
-const { formatLogTimestamp } = require('../../shared/utils/formatters');
 
 /**
  * SingleBotProcess (Infrastructure Layer)
@@ -19,7 +18,6 @@ class SingleBotProcess extends EventEmitter {
     this.proxy = proxy;
     this.child = null;
     this.startTime = null;
-    this.lifecycleState = 'IDLE'; // IDLE | STARTING | RUNNING | STOPPING | STOPPED
     this.restartAttempts = 0;
     this.isManualStop = false;
     this.loginWatchdogTimer = null;
@@ -50,7 +48,6 @@ class SingleBotProcess extends EventEmitter {
       status: 'idle',
       message: ''
     };
-    this.eventState = null;
     this.workspaceRoot = path.resolve(__dirname, '../../../');
     this._stdoutBuffer = '';
     this._stderrBuffer = '';
@@ -70,80 +67,18 @@ class SingleBotProcess extends EventEmitter {
     return path.resolve(this.workspaceRoot, 'jars/games', jarFilename);
   }
 
-  getLifecycleState() {
-    return this.lifecycleState;
-  }
-
-  buildProxyArgs(proxy) {
-    const args = [];
-    if (!proxy || !proxy.host || !proxy.port) return args;
-
-    const type = (proxy.type || 'socks').toLowerCase();
-    if (type === 'socks' || type === 'socks5' || type === 'socks4') {
-      args.push(`-DsocksProxyHost=${proxy.host}`);
-      args.push(`-DsocksProxyPort=${proxy.port}`);
-      const socksVersion = (type === 'socks4') ? '4' : '5';
-      args.push(`-DsocksProxyVersion=${socksVersion}`);
-      if (proxy.username) {
-        args.push(`-Djava.net.socks.username=${proxy.username}`);
-        args.push(`-Davatar.proxyUser=${proxy.username}`);
-      }
-      if (proxy.password) {
-        args.push(`-Djava.net.socks.password=${proxy.password}`);
-        args.push(`-Davatar.proxyPass=${proxy.password}`);
-      }
-    } else {
-      args.push(`-Dhttp.proxyHost=${proxy.host}`);
-      args.push(`-Dhttp.proxyPort=${proxy.port}`);
-      args.push(`-Dhttps.proxyHost=${proxy.host}`);
-      args.push(`-Dhttps.proxyPort=${proxy.port}`);
-      if (proxy.username) {
-        args.push(`-Dhttp.proxyUser=${proxy.username}`);
-        args.push(`-Davatar.proxyUser=${proxy.username}`);
-      }
-      if (proxy.password) {
-        args.push(`-Dhttp.proxyPassword=${proxy.password}`);
-        args.push(`-Davatar.proxyPass=${proxy.password}`);
-      }
-    }
-    args.push('-Djava.net.useSystemProxies=true');
-    args.push('-Dhttp.nonProxyHosts=angelchip.net|*.angelchip.net');
-    args.push('-Dhttps.nonProxyHosts=angelchip.net|*.angelchip.net');
-    args.push('-Djdk.http.auth.tunneling.disabledSchemes=');
-    args.push(`-Davatar.proxyHost=${proxy.host}`);
-    args.push(`-Davatar.proxyPort=${proxy.port}`);
-    args.push(`-Davatar.proxyType=${type}`);
-    return args;
-  }
-
   buildArgs(javaBin) {
     const args = [];
-    const memoryMb = parseInt(this.globalConfig.maxMemoryMb || 48, 10);
+    const memoryMb = parseInt(this.globalConfig.maxMemoryMb || 64, 10);
 
-    // =========================================================================
-    // TỐI ƯU HÓA SIÊU CẤP CHO JAVA 8 & MÔI TRƯỜNG SHARED HOSTING (CPANEL NPROC)
-    // 1. Tối ưu RAM: Khởi đầu 12MB, trần tối đa 48MB (đủ dư dả cho map nông trại/câu cá)
-    //    Giảm CodeCache xuống 8M và thread stack xuống 160k để giảm tải Virtual Memory.
-    // 2. Tối ưu Luồng (Threads): Ép Client mode, GC đơn luồng, 1 JIT compiler thread,
-    //    chặn JVM tự bung thread pool theo số core vật lý (30 cores -> ép về 1).
-    // =========================================================================
     args.push(`-Xmx${memoryMb}M`);
-    args.push('-Xms12M');
-    args.push('-Xss160k');
-    args.push('-client');
+    args.push(`-Xms24M`);
+    args.push('-Xss256k');
     args.push('-XX:+UseSerialGC');
     args.push('-XX:TieredStopAtLevel=1');
     args.push('-XX:CICompilerCount=1');
-    args.push('-XX:ActiveProcessorCount=1');
-    args.push('-Djava.util.concurrent.ForkJoinPool.common.parallelism=1');
-    args.push('-XX:ReservedCodeCacheSize=8M');
-
-    // Tắt triệt để toàn bộ Graphic AWT/2D pipeline không dùng trong chế độ Headless
+    args.push('-XX:ReservedCodeCacheSize=16M');
     args.push('-Djava.awt.headless=true');
-    args.push('-Dsun.java2d.noddraw=true');
-    args.push('-Dsun.java2d.opengl=false');
-    args.push('-Dsun.java2d.d3d=false');
-
     args.push('-Dfile.encoding=UTF-8');
     args.push('-Dsun.stdout.encoding=UTF-8');
     args.push('-Dsun.stderr.encoding=UTF-8');
@@ -151,8 +86,9 @@ class SingleBotProcess extends EventEmitter {
     args.push('-Dstderr.encoding=UTF-8');
     args.push(`-Duser.home=${this.workspaceRoot}`);
 
-    // Pass account-specific properties (Password is kept strictly out of CLI args to protect against ps aux exposure)
+    // Pass account-specific properties
     if (this.account.username) args.push(`-Davatar.user=${this.account.username}`);
+    if (this.account.password) args.push(`-Davatar.pass=${this.account.password}`);
     args.push(`-Davatar.server=${this.account.serverId !== undefined ? this.account.serverId : 0}`);
     args.push(`-Davatar.serverName=${this.account.serverName || (this.account.serverId === 0 ? 'Hoàn Mỹ' : 'Diệu Kỳ')}`);
 
@@ -172,12 +108,8 @@ class SingleBotProcess extends EventEmitter {
 
     const hasFeature = (f) => !allowedFeatures || allowedFeatures.includes(f);
 
-    if (hasFeature('upThue')) {
-      const tc = (this.account.targetCoins !== undefined && this.account.targetCoins !== null) ? parseInt(this.account.targetCoins, 10) : 0;
-      const ud = (this.account.upDays !== undefined && this.account.upDays !== null) ? parseInt(this.account.upDays, 10) : 0;
-      args.push(`-Davatar.targetCoins=${tc}`);
-      args.push(`-Davatar.upDays=${ud}`);
-    }
+    if (this.account.targetCoins && hasFeature('upThue')) args.push(`-Davatar.targetCoins=${this.account.targetCoins}`);
+    if (this.account.upDays && hasFeature('upThue')) args.push(`-Davatar.upDays=${this.account.upDays}`);
     if (this.account.pendingReset) {
       args.push('-Davatar.resetOnStart=true');
       this.account.pendingReset = false;
@@ -260,7 +192,40 @@ class SingleBotProcess extends EventEmitter {
     this.proxy = proxy;
 
     if (proxy && proxy.host && proxy.port) {
-      args.push(...this.buildProxyArgs(proxy));
+      const type = (proxy.type || 'socks').toLowerCase();
+      if (type === 'socks' || type === 'socks5' || type === 'socks4') {
+        args.push(`-DsocksProxyHost=${proxy.host}`);
+        args.push(`-DsocksProxyPort=${proxy.port}`);
+        args.push('-DsocksProxyVersion=5');
+        if (proxy.username) {
+          args.push(`-Djava.net.socks.username=${proxy.username}`);
+          args.push(`-Davatar.proxyUser=${proxy.username}`);
+        }
+        if (proxy.password) {
+          args.push(`-Djava.net.socks.password=${proxy.password}`);
+          args.push(`-Davatar.proxyPass=${proxy.password}`);
+        }
+      } else {
+        args.push(`-Dhttp.proxyHost=${proxy.host}`);
+        args.push(`-Dhttp.proxyPort=${proxy.port}`);
+        args.push(`-Dhttps.proxyHost=${proxy.host}`);
+        args.push(`-Dhttps.proxyPort=${proxy.port}`);
+        if (proxy.username) {
+          args.push(`-Dhttp.proxyUser=${proxy.username}`);
+          args.push(`-Davatar.proxyUser=${proxy.username}`);
+        }
+        if (proxy.password) {
+          args.push(`-Dhttp.proxyPassword=${proxy.password}`);
+          args.push(`-Davatar.proxyPass=${proxy.password}`);
+        }
+      }
+      args.push('-Djava.net.useSystemProxies=true');
+      args.push('-Dhttp.nonProxyHosts=angelchip.net|*.angelchip.net');
+      args.push('-Dhttps.nonProxyHosts=angelchip.net|*.angelchip.net');
+      args.push('-Djdk.http.auth.tunneling.disabledSchemes=');
+      args.push(`-Davatar.proxyHost=${proxy.host}`);
+      args.push(`-Davatar.proxyPort=${proxy.port}`);
+      args.push(`-Davatar.proxyType=${type}`);
       this.usingDirectIp = false;
     } else {
       this.usingDirectIp = true;
@@ -302,18 +267,11 @@ class SingleBotProcess extends EventEmitter {
   }
 
   start(javaBin) {
-    if (this.lifecycleState === 'STOPPING') {
-      this.emitLog('warn', `⏳ [${this.account.username}] Tiến trình đang dừng, vui lòng đợi hoàn tất trước khi khởi chạy lại.`);
-      return false;
-    }
-
-    if (this.child && !this.child.killed && this.lifecycleState === 'RUNNING') {
+    if (this.child && !this.child.killed) {
       return false;
     }
 
     this.isManualStop = false;
-    this.lifecycleState = 'STARTING';
-
     if (this.restartTimer) {
       clearTimeout(this.restartTimer);
       this.restartTimer = null;
@@ -324,21 +282,16 @@ class SingleBotProcess extends EventEmitter {
       const serverName = this.account.serverName || (this.account.serverId === 0 ? 'Hoàn Mỹ' : 'Diệu Kỳ');
       this.emitLog('system', `🚀 [${this.account.username}] Khởi chạy tiến trình bot trên Server [${serverName}]...`);
 
-      const child = spawn(javaBin, args, {
+      this.child = spawn(javaBin, args, {
         cwd: this.workspaceRoot,
-        detached: process.platform !== 'win32',
         env: {
           ...process.env,
-          JAVA_TOOL_OPTIONS: '-Dfile.encoding=UTF-8 -Dsun.jnu.encoding=UTF-8',
-          AVATAR_USER: this.account.username || '',
-          AVATAR_PASS: this.account.password || ''
+          JAVA_TOOL_OPTIONS: '-Dfile.encoding=UTF-8 -Dsun.jnu.encoding=UTF-8'
         }
       });
 
-      this.child = child;
       this.startTime = Date.now();
-      this.lifecycleState = 'RUNNING';
-      const pid = child.pid;
+      const pid = this.child.pid;
       this.emitLog('info', `✅ [${this.account.username}] Bot đang chạy (PID: ${pid})`);
       this.emit('started', { accountId: this.account.id, pid });
 
@@ -346,12 +299,9 @@ class SingleBotProcess extends EventEmitter {
       this._stdoutBuffer = '';
       this._stderrBuffer = '';
 
-      // Handle STDOUT with stream line buffering and 64KB max buffer overflow protection
-      child.stdout.on('data', (chunk) => {
+      // Handle STDOUT with stream line buffering
+      this.child.stdout.on('data', (chunk) => {
         this._stdoutBuffer += chunk.toString('utf8');
-        if (this._stdoutBuffer.length > 65536) {
-          this._stdoutBuffer = this._stdoutBuffer.slice(-32768);
-        }
         const lines = this._stdoutBuffer.split('\n');
         this._stdoutBuffer = lines.pop(); // Keep incomplete trailing fragment
         for (const line of lines) {
@@ -359,12 +309,9 @@ class SingleBotProcess extends EventEmitter {
         }
       });
 
-      // Handle STDERR with stream line buffering and 64KB max buffer overflow protection
-      child.stderr.on('data', (chunk) => {
+      // Handle STDERR with stream line buffering
+      this.child.stderr.on('data', (chunk) => {
         this._stderrBuffer += chunk.toString('utf8');
-        if (this._stderrBuffer.length > 65536) {
-          this._stderrBuffer = this._stderrBuffer.slice(-32768);
-        }
         const lines = this._stderrBuffer.split('\n');
         this._stderrBuffer = lines.pop();
         for (const line of lines) {
@@ -373,12 +320,7 @@ class SingleBotProcess extends EventEmitter {
       });
 
       // Handle Exit
-      child.on('close', (code, signal) => {
-        // Guard against race condition: if this.child has already been replaced by a newer spawn, do not overwrite this.child
-        if (this.child !== child) {
-          return;
-        }
-
+      this.child.on('close', (code, signal) => {
         if (this._stdoutBuffer && this._stdoutBuffer.trim()) {
           this.processLogOutput(this._stdoutBuffer, 'stdout');
           this._stdoutBuffer = '';
@@ -387,45 +329,24 @@ class SingleBotProcess extends EventEmitter {
           this.processLogOutput(this._stderrBuffer, 'stderr');
           this._stderrBuffer = '';
         }
-
-        const isTargetReached = Boolean(this.accountState && (this.accountState.state === 'target_reached' || this.accountState.isCompleted));
+        this.emitLog('warn', `⚠️ [${this.account.username}] Tiến trình bot dừng với mã thoát: ${code || signal || '0'}`);
         const wasManual = this.isManualStop;
-        const isPermanentError = Boolean(code === 2 || (this.accountState && (this.accountState.state === 'auth_error' || this.accountState.state === 'account_locked' || this.accountState.state === 'proxy_expired')));
-
-        if (isTargetReached) {
-          this.emitLog('success', `🏆 [${this.account.username}] Tiến trình bot đã dừng sau khi hoàn thành mục tiêu.`);
-        } else if (isPermanentError) {
-          this.emitLog('error', `🛑 [${this.account.username}] Dừng bot do lỗi xác thực / tài khoản bị khóa / proxy hết hạn (Mã thoát: ${code}).`);
-        } else if (wasManual) {
-          this.emitLog('info', `⏹️ [${this.account.username}] Tiến trình bot đã dừng.`);
-        } else if (code === 0) {
-          this.emitLog('info', `✅ [${this.account.username}] Tiến trình bot kết thúc (Mã: 0).`);
-        } else {
-          this.emitLog('warn', `⚠️ [${this.account.username}] Tiến trình bot dừng với mã thoát: ${code || signal || '0'}`);
-        }
-
         this.child = null;
         this.startTime = null;
-        this.lifecycleState = 'STOPPED';
-        this.emit('stopped', { accountId: this.account.id, code, wasManual, isTargetReached });
+        this.emit('stopped', { accountId: this.account.id, code, wasManual });
 
-        if (!wasManual && !isTargetReached && !isPermanentError && this.globalConfig.autoRestart) {
+        if (!wasManual && this.globalConfig.autoRestart) {
           this.scheduleRestart(javaBin);
         }
       });
 
-      child.on('error', (err) => {
+      this.child.on('error', (err) => {
         this.emitLog('error', `❌ [${this.account.username}] Lỗi tiến trình bot: ${err.message}`);
-        this.emit('process-error', { accountId: this.account.id, error: err });
-        // Only emit raw 'error' if a listener is registered to prevent unhandled error event crash in Node.js
-        if (this.listenerCount('error') > 0) {
-          this.emit('error', { accountId: this.account.id, error: err });
-        }
+        this.emit('error', { accountId: this.account.id, error: err });
       });
 
       return true;
     } catch (err) {
-      this.lifecycleState = 'STOPPED';
       this.emitLog('error', `❌ [${this.account.username}] Không thể khởi chạy: ${err.message}`);
       return false;
     }
@@ -451,15 +372,6 @@ class SingleBotProcess extends EventEmitter {
           ...parsed.accountStatusUpdate
         };
         this.emit('account-status', { accountId: this.account.id, state: this.accountState });
-
-        if (parsed.accountStatusUpdate.state === 'auth_error' || parsed.accountStatusUpdate.state === 'account_locked') {
-          this.isManualStop = true;
-          setTimeout(() => {
-            if (this.child) {
-              this.stop(true);
-            }
-          }, 2500);
-        }
       }
 
       if (parsed.isTargetReached) {
@@ -475,24 +387,16 @@ class SingleBotProcess extends EventEmitter {
           message: 'Đã hoàn thành mục tiêu!'
         };
         this.emit('auto-status', { accountId: this.account.id, autoState: this.autoState });
-        const targetMsg = (parsed.accountStatusUpdate && parsed.accountStatusUpdate.message)
-          ? parsed.accountStatusUpdate.message
-          : 'Đã đạt mục tiêu up xu theo cài đặt!';
         this.accountState = {
           state: 'target_reached',
-          message: targetMsg,
+          message: parsed.accountStatusUpdate && parsed.accountStatusUpdate.message ? parsed.accountStatusUpdate.message : 'Đã đạt yêu cầu up xu theo cài đặt!',
           isCompleted: true,
           isError: false,
           isMaintenance: false
         };
         this.emit('account-status', { accountId: this.account.id, state: this.accountState });
         this.emitLog('success', `🏆 [${this.account.username}] 🎉 HOÀN THÀNH MỤC TIÊU: ${this.accountState.message}`);
-        // Chờ tiến trình Java tự động kết thúc (Java gọi System.exit(0) sau 2s). Sau 3.5s dọn dẹp an toàn
-        setTimeout(() => {
-          if (this.child) {
-            this.stop(true);
-          }
-        }, 3500);
+        setTimeout(() => this.stop(), 1000);
       }
 
       if (parsed.autoStatusUpdate) {
@@ -530,38 +434,6 @@ class SingleBotProcess extends EventEmitter {
         this.emit('stats', { accountId: this.account.id, stats: this.playerStats });
       }
 
-      if (parsed.eventStatusUpdate) {
-        const update = parsed.eventStatusUpdate;
-        const source = update.source === 'fish' ? 'fish' : 'farm';
-        const todayStr = new Date().toISOString().slice(0, 10);
-
-        if (!this.eventState || this.eventState.date !== todayStr || update.isNewDay) {
-          const prevFarmMax = this.eventState?.farm?.max || 120;
-          const prevFishMax = this.eventState?.fish?.max || 100;
-          this.eventState = {
-            date: todayStr,
-            farm: { items: {}, total: 0, max: prevFarmMax },
-            fish: { items: {}, total: 0, max: prevFishMax },
-            updatedAt: Date.now()
-          };
-        }
-
-        const group = this.eventState[source];
-        if (group && update.current !== undefined) {
-          const itemKey = update.item ? String(update.item).trim() : source;
-          const currentVal = Number(update.current) || 0;
-          group.items[itemKey] = currentVal;
-          if (update.max && Number(update.max) > 0) {
-            group.max = Number(update.max);
-          }
-          // update.current trực tiếp phản ánh số lượng tích lũy hôm nay (ví dụ 31/120)
-          group.total = currentVal;
-        }
-
-        this.eventState.updatedAt = Date.now();
-        this.emit('event-status', { accountId: this.account.id, eventState: this.eventState });
-      }
-
       if (parsed.proxyExpiredReason) {
         this.emit('proxy-expired', {
           proxyId: this.account.proxyId,
@@ -594,7 +466,7 @@ class SingleBotProcess extends EventEmitter {
   }
 
   emitLog(type, text) {
-    const timestamp = formatLogTimestamp();
+    const timestamp = new Date().toLocaleTimeString('vi-VN', { hour12: false });
     const logEntry = {
       timestamp,
       type,
@@ -606,35 +478,17 @@ class SingleBotProcess extends EventEmitter {
   }
 
   scheduleRestart(javaBin) {
-    if (this.accountState && (this.accountState.state === 'target_reached' || this.accountState.isCompleted)) {
-      return;
-    }
-    if (this.accountState && (this.accountState.state === 'auth_error' || this.accountState.state === 'account_locked')) {
-      this.emitLog('error', `🛑 [${this.account.username}] Dừng tự động kết nối lại vì lỗi xác thực tài khoản hoặc tài khoản bị khóa!`);
-      return;
-    }
     if (this.accountState && this.accountState.state === 'proxy_expired') {
       this.emitLog('error', `🛑 [${this.account.username}] Dừng tự động kết nối lại vì Proxy đã HẾT HẠN! Vui lòng đổi Proxy trong Quản Lý Proxy.`);
       return;
     }
 
-    const MAX_RESTART_ATTEMPTS = 5;
-    if (this.restartAttempts >= MAX_RESTART_ATTEMPTS) {
-      this.emitLog('error', `🛑 [${this.account.username}] Đã đạt giới hạn tối đa ${MAX_RESTART_ATTEMPTS} lần tự khởi động lại. Dừng bot để bảo vệ hệ thống.`);
-      this.stop();
-      return;
-    }
-
     this.restartAttempts++;
-    // Exponential backoff with jitter: 5s, 9s, 16s, 29s, capped at 30s
-    const baseDelay = Math.min(30000, 5000 * Math.pow(1.8, this.restartAttempts - 1));
-    const jitter = Math.floor(Math.random() * 2000);
-    const delay = Math.round(baseDelay + jitter);
-
-    this.emitLog('warn', `🔄 [${this.account.username}] Tự động khởi động lại sau ${(delay / 1000).toFixed(1)}s (Lần ${this.restartAttempts}/${MAX_RESTART_ATTEMPTS})...`);
+    const delay = Math.min(10000 + (this.restartAttempts * 2000), 30000);
+    this.emitLog('warn', `🔄 [${this.account.username}] Tự động khởi động lại sau ${delay / 1000}s (Lần ${this.restartAttempts})...`);
 
     this.restartTimer = setTimeout(() => {
-      if (!this.isManualStop && this.lifecycleState !== 'STOPPING') {
+      if (!this.isManualStop) {
         this.start(javaBin);
       }
     }, delay);
@@ -668,7 +522,7 @@ class SingleBotProcess extends EventEmitter {
     });
   }
 
-  stop(preserveTargetState = false) {
+  stop() {
     this.isManualStop = true;
     if (this.restartTimer) {
       clearTimeout(this.restartTimer);
@@ -679,61 +533,37 @@ class SingleBotProcess extends EventEmitter {
       this.loginWatchdogTimer = null;
     }
 
-    if (!this.child || this.lifecycleState === 'STOPPING' || this.lifecycleState === 'STOPPED') {
-      this.lifecycleState = 'STOPPED';
+    if (!this.child) {
       return true;
     }
 
-    this.lifecycleState = 'STOPPING';
-    const targetChild = this.child;
-    const pid = targetChild.pid;
+    const pid = this.child.pid;
     this.emitLog('system', `⏹️ [${this.account.username}] Đang dừng tiến trình bot (PID: ${pid})...`);
 
     try {
       if (process.platform === 'win32' && pid) {
         execSync(`taskkill /pid ${pid} /T /F`, { stdio: 'ignore' });
       } else if (pid) {
-        // Unix/Linux: Try graceful SIGTERM to process group first
-        try {
-          process.kill(-pid, 'SIGTERM');
-        } catch (e) {
-          try { targetChild.kill('SIGTERM'); } catch (err) {}
-        }
-        // Forceful fallback with SIGKILL after 2500ms if still alive
-        setTimeout(() => {
-          try {
-            if (process.kill(-pid, 0)) {
-              process.kill(-pid, 'SIGKILL');
-            }
-          } catch (e) {
-            try { targetChild.kill('SIGKILL'); } catch (err) {}
-          }
-        }, 2500);
+        process.kill(-pid, 'SIGKILL');
       }
     } catch (e) {
       try {
-        targetChild.kill('SIGKILL');
-      } catch (err) {}
+        this.child.kill('SIGKILL');
+      } catch (err) { }
     }
 
-    if (this.child === targetChild) {
-      this.child = null;
-      this.startTime = null;
-      this.lifecycleState = 'STOPPED';
-    }
-
+    this.child = null;
+    this.startTime = null;
     if (this.account) {
       this.account.lastAutoType = null;
     }
     this.autoState = { isRunning: false, autoType: null, subTask: null, status: 'stopped', message: '' };
-    if (!preserveTargetState && this.accountState?.state !== 'target_reached') {
-      this.accountState = { state: 'idle', message: 'Đã dừng', isError: false, isMaintenance: false };
-    }
+    this.accountState = { state: 'idle', message: 'Đã dừng', isError: false, isMaintenance: false };
     return true;
   }
 
   getStatus() {
-    const isRunning = Boolean(this.child && !this.child.killed && this.child.exitCode === null && this.lifecycleState === 'RUNNING');
+    const isRunning = Boolean(this.child && !this.child.killed && this.child.exitCode === null);
     let uptimeSeconds = 0;
     if (isRunning && this.startTime) {
       uptimeSeconds = Math.floor((Date.now() - this.startTime) / 1000);
@@ -841,16 +671,13 @@ class SingleBotProcess extends EventEmitter {
           this.child.stdin.write(`START_AUTO ${autoType}\n`);
 
           const friendlyName = this.getFriendlyName(autoType);
-          const isOnline = Boolean(this.accountState && this.accountState.state === 'online');
 
           if (isParentRunning && isTargetSubTask) {
             this.autoState = {
               ...this.autoState,
               subTask: autoType,
-              status: isOnline ? 'running' : 'pending',
-              message: isOnline
-                ? `Đang tạm chuyển sang ${friendlyName} (từ ${this.getFriendlyName(this.autoState.autoType)})...`
-                : `Đang chờ vào game để chạy ${friendlyName}...`
+              status: 'running',
+              message: `Đang tạm chuyển sang ${friendlyName} (từ ${this.getFriendlyName(this.autoState.autoType)})...`
             };
           } else {
             this.account.lastAutoType = autoType;
@@ -858,15 +685,12 @@ class SingleBotProcess extends EventEmitter {
               isRunning: true,
               autoType,
               subTask: null,
-              status: isOnline ? 'running' : 'pending',
-              message: isOnline ? `Đang chạy ${friendlyName}...` : `Đang chờ vào game để chạy ${friendlyName}...`
+              status: 'running',
+              message: `Đang chạy ${friendlyName}...`
             };
           }
         } else if (action === 'stop') {
           this.child.stdin.write(`STOP_AUTO ${autoType}\n`);
-          if (autoType === 'all' || !this.autoState?.subTask || this.autoState?.autoType === autoType) {
-            this.account.lastAutoType = null;
-          }
 
           // Nếu chỉ dừng subtask khi auto lớn đang chạy -> quay lại auto lớn, không tắt tiến trình auto!
           if (this.autoState && this.autoState.isRunning && this.autoState.subTask &&

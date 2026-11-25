@@ -13,35 +13,17 @@ window.SystemChecklist = function SystemChecklist({ status }) {
       <h3>Kiểm Tra Tệp Tin & Môi Trường</h3>
       <div className="checklist">
         <div className="check-item">
-          <span className="check-status" style={{ display: 'inline-flex', alignItems: 'center' }}>
-            {isEmulatorOk ? (
-              <window.Icon name="check-circle" size={16} color="var(--apple-green)" />
-            ) : (
-              <window.Icon name="x-circle" size={16} color="var(--apple-red)" />
-            )}
-          </span>
+          <span className="check-status">{isEmulatorOk ? '✅' : '❌'}</span>
           <span className="check-name">AngelChipEmulator_V2Proxy.jar</span>
           <span className="check-desc">Giả lập Java ME MicroEmulator Headless</span>
         </div>
         <div className="check-item">
-          <span className="check-status" style={{ display: 'inline-flex', alignItems: 'center' }}>
-            {isGameOk ? (
-              <window.Icon name="check-circle" size={16} color="var(--apple-green)" />
-            ) : (
-              <window.Icon name="x-circle" size={16} color="var(--apple-red)" />
-            )}
-          </span>
+          <span className="check-status">{isGameOk ? '✅' : '❌'}</span>
           <span className="check-name">avatar_fish_build40.jar</span>
           <span className="check-desc">Game Avatar Auto Fish Build</span>
         </div>
         <div className="check-item">
-          <span className="check-status" style={{ display: 'inline-flex', alignItems: 'center' }}>
-            {isJavaOk ? (
-              <window.Icon name="check-circle" size={16} color="var(--apple-green)" />
-            ) : (
-              <window.Icon name="x-circle" size={16} color="var(--apple-red)" />
-            )}
-          </span>
+          <span className="check-status">{isJavaOk ? '✅' : '❌'}</span>
           <span className="check-name">Môi trường Java Runtime</span>
           <span className="check-desc">{javaVersion}</span>
         </div>
