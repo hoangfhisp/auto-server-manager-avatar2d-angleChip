@@ -7,9 +7,10 @@
 window.AccountLogsModal = function AccountLogsModal({ account, onClose, isAdmin = undefined }) {
   const [logs, setLogs] = React.useState([]);
   const [isLoading, setIsLoading] = React.useState(true);
-  const [filter, setFilter] = React.useState('all'); // 'all', 'auto', 'system'
+  const [filter, setFilter] = React.useState('all'); // 'all', 'event', 'auto', 'system'
   const [autoScroll, setAutoScroll] = React.useState(true);
   const [showEmulatorLogs, setShowEmulatorLogs] = React.useState(false);
+  const [eventState, setEventState] = React.useState(account.eventState || null);
   const logContainerRef = React.useRef(null);
 
   const currentUser = window.authService?.getCurrentUser ? window.authService.getCurrentUser() : null;
@@ -35,7 +36,10 @@ window.AccountLogsModal = function AccountLogsModal({ account, onClose, isAdmin 
     if (/AVATAR HEADLESS AUTO-LOGIN/i.test(text)) return true;
     if (/TÀI KHOẢN \(WEB\):|SERVER\s*\(WEB\):|MẬT KHẨU \(WEB\):/i.test(text)) return true;
     if (/\[PROXY SETUP\]|\[GIẢ LẬP ANGELCHIP\]|PROXY\s*\(NET\):/i.test(text)) return true;
+    if (/\[PROXY ALERT\]|\[PROXY RECOVERY\]/i.test(text)) return true;
+    if (/\[QUY TRÌNH\]/i.test(text)) return true;
     if (/\[CÀI ĐẶT AUTO/i.test(text)) return true;
+    if (/\(PID:\s*\d+\)/i.test(text) || /tiến trình bot/i.test(text) || /Đang dừng tiến trình/i.test(text)) return true;
     if (/DEBUG/i.test(text)) return true;
     return false;
   };
@@ -75,10 +79,10 @@ window.AccountLogsModal = function AccountLogsModal({ account, onClose, isAdmin 
         try {
           const newLog = JSON.parse(e.data);
           if (!newLog) return;
-          const matchesAccount = 
+          const matchesAccount =
             (newLog.accountId && String(newLog.accountId) === String(account.id)) ||
             (account.username && (newLog.username === account.username || newLog.text?.includes(`[${account.username}]`)));
-          
+
           if (matchesAccount) {
             setLogs(prev => {
               const last = prev[prev.length - 1];
@@ -88,7 +92,16 @@ window.AccountLogsModal = function AccountLogsModal({ account, onClose, isAdmin 
               return [...prev.slice(-999), newLog];
             });
           }
-        } catch (err) {}
+        } catch (err) { }
+      });
+
+      es.addEventListener('bot-event-status', (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          if (data && String(data.accountId) === String(account.id) && data.eventState) {
+            setEventState(data.eventState);
+          }
+        } catch (err) { }
       });
     } catch (err) {
       console.warn('SSE EventSource failed to connect:', err);
@@ -117,6 +130,76 @@ window.AccountLogsModal = function AccountLogsModal({ account, onClose, isAdmin 
 
   if (!account) return null;
 
+  const formatNumber = (val) => {
+    if (window.formatters && typeof window.formatters.formatNumber === 'function') {
+      return window.formatters.formatNumber(val);
+    }
+    return String(val !== undefined && val !== null ? val : 0);
+  };
+
+  // Identify event logs and compute current event statistics separated for Farm and Fish
+  const eventLogs = logs.filter(l => {
+    const rawText = l.text || '';
+    const text = rawText.toLowerCase();
+    return l.type === 'event' || text.includes('sự kiện') || text.includes('🎁') || text.includes('vật phẩm');
+  });
+
+  const eventData = React.useMemo(() => {
+    const result = {
+      farm: { total: 0, max: 120, hasData: false },
+      fish: { total: 0, max: 100, hasData: false }
+    };
+
+    if (eventState) {
+      if (eventState.farm) {
+        result.farm.total = Number(eventState.farm.total ?? eventState.farm.current) || 0;
+        result.farm.max = Number(eventState.farm.max) || 120;
+        if (result.farm.total > 0 || Object.keys(eventState.farm.items || {}).length > 0) {
+          result.farm.hasData = true;
+        }
+      }
+      if (eventState.fish) {
+        result.fish.total = Number(eventState.fish.total ?? eventState.fish.current) || 0;
+        result.fish.max = Number(eventState.fish.max) || 100;
+        if (result.fish.total > 0 || Object.keys(eventState.fish.items || {}).length > 0) {
+          result.fish.hasData = true;
+        }
+      }
+      // Fallback cho eventState dạng phẳng cũ
+      if (!result.farm.hasData && !result.fish.hasData && eventState.current !== undefined) {
+        const src = eventState.source === 'fish' ? 'fish' : 'farm';
+        result[src].total = Number(eventState.current) || 0;
+        result[src].max = Number(eventState.max) || (src === 'fish' ? 100 : 120);
+        if (result[src].total > 0) {
+          result[src].hasData = true;
+        }
+      }
+    }
+
+    // Fallback: Quét ngược từ nhật ký nếu eventState chưa có dữ liệu trong RAM
+    if (!result.farm.hasData && !result.fish.hasData && logs && logs.length > 0) {
+      for (let i = logs.length - 1; i >= 0; i--) {
+        const txt = logs[i].text || '';
+        if (!txt.includes('🎁') && !txt.includes('SỰ KIỆN')) continue;
+
+        const isFish = txt.includes('FISH') || txt.toLowerCase().includes('câu cá');
+        const target = isFish ? result.fish : result.farm;
+
+        if (!target.hasData) {
+          const match = txt.match(/(?:Đã nhận|Nhận)(?:[^\(]*?)\((?:Hôm nay|Tổng):\s*(\d+)\/(\d+)\)/i);
+          if (match) {
+            target.total = parseInt(match[1], 10) || 0;
+            const max = parseInt(match[2], 10);
+            if (max > 0) target.max = max;
+            target.hasData = true;
+          }
+        }
+      }
+    }
+
+    return result;
+  }, [logs, eventState]);
+
   const filteredLogs = logs.filter(l => {
     const rawText = l.text || '';
     const isEmu = isEmulatorLog(rawText);
@@ -124,6 +207,9 @@ window.AccountLogsModal = function AccountLogsModal({ account, onClose, isAdmin 
 
     if (filter === 'all') return true;
     const text = rawText.toLowerCase();
+    if (filter === 'event') {
+      return l.type === 'event' || text.includes('sự kiện') || text.includes('🎁') || text.includes('vật phẩm');
+    }
     if (filter === 'auto') {
       return l.type === 'auto' || text.includes('auto') || text.includes('farm') || text.includes('câu cá') || text.includes('bán đá') || text.includes('kc');
     }
@@ -138,22 +224,85 @@ window.AccountLogsModal = function AccountLogsModal({ account, onClose, isAdmin 
       return { tag: 'GIẢ LẬP', className: 'account-logs-tag-bot', textClass: 'account-logs-text-default' };
     }
     const lower = text.toLowerCase();
-    if (lower.includes('auto farm') || lower.includes('chăm sóc') || lower.includes('thu hoạch') || lower.includes('gieo hạt') || lower.includes('nông trại')) {
-      return { tag: 'FARM', className: 'account-logs-tag-farm', textClass: 'account-logs-text-farm' };
+    if (lower.includes('đăng nhập thành công') || lower.includes('vào game thành công') || lower.includes('đang treo online')) {
+      return { tag: 'ONLINE', className: 'account-logs-tag-success', textClass: 'account-logs-text-farm' };
     }
-    if (lower.includes('câu cá') || lower.includes('mua vé') || lower.includes('giật cần') || lower.includes('bán cá')) {
-      return { tag: 'CÂU CÁ', className: 'account-logs-tag-fish', textClass: 'account-logs-text-fish' };
+    if (lower.includes('sự kiện') || lower.includes('[sự kiện') || lower.includes('🎁') || lower.includes('[event') || lower.includes('vật phẩm')) {
+      return { tag: 'SỰ KIỆN', className: 'account-logs-tag-event', textClass: 'account-logs-text-event', isEvent: true };
     }
-    if (lower.includes('bán đá') || lower.includes('đập đá') || lower.includes('quặng') || lower.includes('kim cương') || lower.includes('kc')) {
+    if (lower.includes('bán đá') || lower.includes('đập đá') || lower.includes('quặng') || lower.includes('kim cương') || lower.includes('kc') || lower.includes('💎') || lower.includes('🪨')) {
       return { tag: 'ĐÁ/KC', className: 'account-logs-tag-ore', textClass: 'account-logs-text-ore' };
     }
-    if (lower.includes('kết nối') || lower.includes('đăng nhập') || lower.includes('máy chủ') || lower.includes('hoàn mỹ') || lower.includes('diệu kỳ') || lower.includes('mạng')) {
+    if (lower.includes('câu cá') || lower.includes('mua vé') || lower.includes('giật cần') || lower.includes('bán cá') || lower.includes('cá cắn') || lower.includes('🎣')) {
+      return { tag: 'CÂU CÁ', className: 'account-logs-tag-fish', textClass: 'account-logs-text-fish' };
+    }
+    if (lower.includes('em bé') || lower.includes('chăm em bé') || lower.includes('chăm baby') || lower.includes('👶')) {
+      return { tag: 'BABY', className: 'account-logs-tag-ore', textClass: 'account-logs-text-ore' };
+    }
+    if (lower.includes('chuyển map') || lower.includes('giữ kết nối') || lower.includes('🗺️') || lower.includes('📡') || lower.includes('duy trì kết nối')) {
       return { tag: 'KẾT NỐI', className: 'account-logs-tag-network', textClass: 'account-logs-text-network' };
     }
-    if (lower.includes('lỗi') || lower.includes('mất kết nối') || lower.includes('thất bại') || lower.includes('bị chặn')) {
+    if (lower.includes('auto farm') || lower.includes('chăm farm') || lower.includes('chăm sóc') || lower.includes('thu hoạch') || lower.includes('gieo hạt') || lower.includes('nông trại') || lower.includes('🌾')) {
+      return { tag: 'FARM', className: 'account-logs-tag-farm', textClass: 'account-logs-text-farm' };
+    }
+    if (lower.includes('lỗi') || lower.includes('mất kết nối') || lower.includes('thất bại') || lower.includes('bị chặn') || lower.includes('❌') || lower.includes('⚠️')) {
       return { tag: 'LỖI', className: 'account-logs-tag-error', textClass: 'account-logs-text-error' };
     }
+    if (lower.includes('kết nối') || lower.includes('đăng nhập') || lower.includes('máy chủ') || lower.includes('hoàn mỹ') || lower.includes('diệu kỳ') || lower.includes('mạng') || lower.includes('quy trình') || lower.includes('🚀') || lower.includes('chờ kết nối lại')) {
+      return { tag: 'KẾT NỐI', className: 'account-logs-tag-network', textClass: 'account-logs-text-network' };
+    }
     return { tag: 'BOT', className: 'account-logs-tag-bot', textClass: 'account-logs-text-default' };
+  };
+
+  const parseLogEntry = (log) => {
+    let rawText = String(log.text || '').trim();
+    let username = log.username || account.username || '';
+    let cleanText = rawText;
+
+    const bracketMatch = cleanText.match(/^\[([a-zA-Z0-9_.-]{3,25})\]\s*(.*)$/);
+    if (bracketMatch) {
+      username = bracketMatch[1];
+      cleanText = bracketMatch[2];
+    }
+
+    if (cleanText.startsWith('QUY TRÌNH->')) {
+      cleanText = cleanText.replace(/^QUY TRÌNH->\s*/, '');
+    }
+
+    const tagInfo = getTagInfo(cleanText || rawText);
+
+    return { username, text: cleanText, tagInfo };
+  };
+
+  const renderLogText = (rawText = '') => {
+    if (!rawText) return '';
+    const emojiRegex = /(🎁|🌾|👶|✅|💬|🔄|⏳|⏹️|⏹|🚀|❌|⚠️|🎣|💎|🪨|📡|🗺️)/g;
+    const parts = rawText.split(emojiRegex);
+    if (parts.length <= 1) return rawText;
+
+    return (
+      <span>
+        {parts.map((part, i) => {
+          if (part === '🎁') return <window.Icon key={i} name="gift" size={13} color="#e599ff" className="account-logs-inline-gift" />;
+          if (part === '🌾') return <window.Icon key={i} name="wheat" size={13} color="var(--apple-green)" className="account-logs-inline-gift" />;
+          if (part === '👶') return <window.Icon key={i} name="baby" size={13} color="var(--apple-orange)" className="account-logs-inline-gift" />;
+          if (part === '✅') return <window.Icon key={i} name="checkCircle" size={13} color="var(--apple-green)" className="account-logs-inline-gift" />;
+          if (part === '💬') return <window.Icon key={i} name="message" size={13} color="var(--apple-gold)" className="account-logs-inline-gift" />;
+          if (part === '🔄') return <window.Icon key={i} name="refresh" size={13} color="var(--apple-orange)" className="account-logs-inline-gift" />;
+          if (part === '⏳') return <window.Icon key={i} name="clock" size={13} color="var(--apple-orange)" className="account-logs-inline-gift" />;
+          if (part === '⏹️' || part === '⏹') return <window.Icon key={i} name="stop" size={13} color="var(--apple-red)" className="account-logs-inline-gift" />;
+          if (part === '🚀') return <window.Icon key={i} name="zap" size={13} color="var(--apple-blue)" className="account-logs-inline-gift" />;
+          if (part === '❌') return <window.Icon key={i} name="xCircle" size={13} color="var(--apple-red)" className="account-logs-inline-gift" />;
+          if (part === '⚠️') return <window.Icon key={i} name="alertTriangle" size={13} color="var(--apple-orange)" className="account-logs-inline-gift" />;
+          if (part === '🎣') return <window.Icon key={i} name="fish" size={13} color="var(--apple-teal)" className="account-logs-inline-gift" />;
+          if (part === '💎') return <window.Icon key={i} name="diamond" size={13} color="var(--apple-purple)" className="account-logs-inline-gift" />;
+          if (part === '🪨') return <window.Icon key={i} name="rock" size={13} color="var(--apple-orange)" className="account-logs-inline-gift" />;
+          if (part === '📡') return <window.Icon key={i} name="network" size={13} color="var(--apple-blue)" className="account-logs-inline-gift" />;
+          if (part === '🗺️') return <window.Icon key={i} name="map" size={13} color="var(--apple-blue)" className="account-logs-inline-gift" />;
+          return part;
+        })}
+      </span>
+    );
   };
 
   return (
@@ -165,8 +314,8 @@ window.AccountLogsModal = function AccountLogsModal({ account, onClose, isAdmin 
       size="lg"
       onClose={onClose}
       footer={
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', gap: '12px' }}>
-          <span style={{ fontSize: '0.74rem', color: 'var(--text-tertiary)', lineHeight: 1.4 }}>
+        <div className="account-logs-modal-footer">
+          <span className="account-logs-modal-footer-hint">
             Nhật ký tự động ưu tiên sự kiện bot & hệ thống. Log giả lập được tắt mặc định.
           </span>
           <button type="button" className="btn btn-secondary btn-sm" onClick={onClose}>
@@ -176,34 +325,50 @@ window.AccountLogsModal = function AccountLogsModal({ account, onClose, isAdmin 
       }
     >
       {/* 1. Toolbar & Filter */}
-      <div className="account-logs-toolbar" style={{ borderRadius: 'var(--radius-sm)', marginBottom: '12px', background: 'rgba(255, 255, 255, 0.03)', border: '1px solid var(--glass-border-subtle)' }}>
-        <div className="account-logs-filter-group" style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+      <div className="account-logs-toolbar">
+        <div className="account-logs-filter-group">
           <button
             type="button"
-            className={`btn btn-xs ${filter === 'all' ? 'btn-primary' : 'btn-secondary'}`}
+            className={`account-logs-filter-btn ${filter === 'all' ? 'active' : ''}`}
             onClick={() => setFilter('all')}
           >
-            Tất Cả ({filteredLogs.length})
+            <window.Icon name="list" size={13} />
+            <span>Tất Cả ({filteredLogs.length})</span>
           </button>
           <button
             type="button"
-            className={`btn btn-xs ${filter === 'auto' ? 'btn-primary' : 'btn-secondary'}`}
+            className={`account-logs-filter-btn account-logs-filter-btn-event ${filter === 'event' ? 'active' : ''}`}
+            onClick={() => setFilter('event')}
+          >
+            <window.Icon name="gift" size={13} />
+            <span>SỰ KIỆN</span>
+            {eventLogs.length > 0 && (
+              <span className={`account-logs-event-count-badge ${filter === 'event' ? 'account-logs-event-count-badge-active' : ''}`}>
+                {eventLogs.length}
+              </span>
+            )}
+          </button>
+          <button
+            type="button"
+            className={`account-logs-filter-btn ${filter === 'auto' ? 'active' : ''}`}
             onClick={() => setFilter('auto')}
           >
-            Hành Động Auto
+            <window.Icon name="cpu" size={13} />
+            <span>Hành Động Auto</span>
           </button>
           <button
             type="button"
-            className={`btn btn-xs ${filter === 'system' ? 'btn-primary' : 'btn-secondary'}`}
+            className={`account-logs-filter-btn ${filter === 'system' ? 'active' : ''}`}
             onClick={() => setFilter('system')}
           >
-            Hệ Thống & Kết Nối
+            <window.Icon name="wifi" size={13} />
+            <span>Hệ Thống & Kết Nối</span>
           </button>
         </div>
 
-        <div className="account-logs-options-group" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div className="account-logs-options-group">
           {isActualAdmin && (
-            <label className="account-logs-auto-refresh-label" style={{ margin: 0, fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer' }} title="Bật/Tắt hiển thị mã nguồn và stacktrace chi tiết của giả lập MicroEmulator">
+            <label className="account-logs-auto-refresh-label" title="Bật/Tắt hiển thị mã nguồn và stacktrace chi tiết của giả lập MicroEmulator">
               <input
                 type="checkbox"
                 checked={showEmulatorLogs}
@@ -212,7 +377,7 @@ window.AccountLogsModal = function AccountLogsModal({ account, onClose, isAdmin 
               <span>Log giả lập</span>
             </label>
           )}
-          <label className="account-logs-auto-refresh-label" style={{ margin: 0, fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer' }} title="Tự động cuộn xuống dòng nhật ký mới nhất theo thời gian thực">
+          <label className="account-logs-auto-refresh-label" title="Tự động cuộn xuống dòng nhật ký mới nhất theo thời gian thực">
             <input
               type="checkbox"
               checked={autoScroll}
@@ -223,46 +388,102 @@ window.AccountLogsModal = function AccountLogsModal({ account, onClose, isAdmin 
         </div>
       </div>
 
-      {/* 2. Log Viewer Body */}
+      {/* 2. Event Progress Highlight Banner (Farm & Fish overall progress: current / max) */}
+      {(eventData.farm.hasData || eventData.fish.hasData) && (
+        <div className="account-logs-event-card">
+          {/* Nông Trại Section */}
+          {eventData.farm.hasData && (
+            <div className="account-logs-event-section">
+              <div className="account-logs-event-header">
+                <div className="account-logs-event-title-group">
+                  <span className="account-logs-event-icon-badge badge-farm">
+                    <window.Icon name="sprout" size={15} color="var(--apple-green)" />
+                  </span>
+                  <div>
+                    <span className="account-logs-event-title">Sự Kiện Nông Trại</span>
+                    <span className="account-logs-event-subtitle">(Thu hoạch nông trại)</span>
+                  </div>
+                </div>
+                <div className="account-logs-event-meta-badge badge-farm">
+                  <span>Đã gom:</span>
+                  <span>{formatNumber(eventData.farm.total)} / {formatNumber(eventData.farm.max)}</span>
+                  <span>({Math.min(100, Math.round((eventData.farm.total / (eventData.farm.max || 120)) * 100))}%)</span>
+                </div>
+              </div>
+
+              {/* Thanh tiến độ Nông Trại */}
+              <div className="account-logs-progress-track">
+                <div
+                  className="account-logs-progress-fill fill-farm"
+                  style={{ width: `${Math.min(100, Math.round((eventData.farm.total / (eventData.farm.max || 120)) * 100))}%` }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Câu Cá Section */}
+          {eventData.fish.hasData && (
+            <div className="account-logs-event-section">
+              <div className="account-logs-event-header">
+                <div className="account-logs-event-title-group">
+                  <span className="account-logs-event-icon-badge badge-fish">
+                    <window.Icon name="fish" size={15} color="var(--apple-teal)" />
+                  </span>
+                  <div>
+                    <span className="account-logs-event-title">Sự Kiện Câu Cá</span>
+                    <span className="account-logs-event-subtitle">(Hồ câu)</span>
+                  </div>
+                </div>
+                <div className="account-logs-event-meta-badge badge-fish">
+                  <span>Đã câu:</span>
+                  <span>{formatNumber(eventData.fish.total)} / {formatNumber(eventData.fish.max)}</span>
+                  <span>({Math.min(100, Math.round((eventData.fish.total / (eventData.fish.max || 100)) * 100))}%)</span>
+                </div>
+              </div>
+
+              {/* Thanh tiến độ Câu Cá */}
+              <div className="account-logs-progress-track">
+                <div
+                  className="account-logs-progress-fill fill-fish"
+                  style={{ width: `${Math.min(100, Math.round((eventData.fish.total / (eventData.fish.max || 100)) * 100))}%` }}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 3. Log Viewer Body */}
       <div
         ref={logContainerRef}
         className="account-logs-body"
-        style={{
-          margin: 0,
-          minHeight: '320px',
-          maxHeight: '460px',
-          borderRadius: 'var(--radius-md)',
-          border: '1px solid var(--glass-border-subtle)',
-          background: 'rgba(10, 11, 14, 0.96)'
-        }}
       >
         {isLoading && logs.length === 0 ? (
-          <div className="account-logs-loading" style={{ padding: '48px 16px', textAlign: 'center' }}>
+          <div className="account-logs-loading">
             {window.CircularSpinner ? (
               <window.CircularSpinner size="md" text="Đang tải nhật ký bot..." />
             ) : (
               <div>
                 <div className="account-logs-loading-spinner" />
-                <span style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)' }}>Đang tải nhật ký bot...</span>
+                <span className="account-logs-subtitle">Đang tải nhật ký bot...</span>
               </div>
             )}
           </div>
         ) : filteredLogs.length === 0 ? (
-          <div className="account-logs-empty" style={{ padding: '48px 16px', textAlign: 'center' }}>
-            <div style={{ marginBottom: '8px', opacity: 0.6 }}>
+          <div className="account-logs-empty">
+            <div className="account-logs-empty-icon-wrap">
               <window.Icon name="terminal" size={36} color="var(--apple-blue)" />
             </div>
-            <div className="account-logs-empty-title" style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>
+            <div className="account-logs-empty-title">
               Chưa Có Sự Kiện Hoạt Động
             </div>
-            <div className="account-logs-empty-subtitle" style={{ fontSize: '0.78rem', color: 'var(--text-tertiary)', marginTop: '4px' }}>
+            <div className="account-logs-empty-subtitle">
               Khi bot chạy hoặc thực hiện auto, toàn bộ sự kiện gieo hạt, thu hoạch, câu cá, kết nối sẽ hiển thị ở đây.
             </div>
           </div>
         ) : (
           filteredLogs.map((log, idx) => {
-            const text = log.text || '';
-            const tagInfo = getTagInfo(text);
+            const { username, text, tagInfo } = parseLogEntry(log);
 
             return (
               <div key={idx} className="account-logs-row">
@@ -272,8 +493,13 @@ window.AccountLogsModal = function AccountLogsModal({ account, onClose, isAdmin 
                 <span className={`account-logs-tag ${tagInfo.className}`}>
                   {tagInfo.tag}
                 </span>
+                {username && (
+                  <span className="account-logs-user-badge">
+                    [{username}]
+                  </span>
+                )}
                 <span className={`account-logs-text ${tagInfo.textClass}`}>
-                  {text}
+                  {renderLogText(text)}
                 </span>
               </div>
             );

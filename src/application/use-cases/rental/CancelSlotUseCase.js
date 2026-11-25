@@ -84,9 +84,11 @@ class CancelSlotUseCase {
       // 1. CHỐNG SPAM THUÊ / HỦY LIÊN TỤC (CHỈ ÁP DỤNG KHI SLOT CÒN HẠN > 0)
       const createdAtMs = account.createdAt ? new Date(account.createdAt).getTime() : 0;
       if (remainingMs > 0 && createdAtMs > 0 && minHoldHours > 0 && !isActualAdmin) {
-        const ageHours = (now - createdAtMs) / (3600 * 1000);
-        if (ageHours < minHoldHours) {
-          const waitMinutes = Math.ceil((minHoldHours * 3600 * 1000 - (now - createdAtMs)) / 60000);
+        // Phòng vệ lệch múi giờ (UTC vs Local): nếu createdAtMs > now do timezone, coi như vừa tạo (0 ms)
+        const elapsedMs = Math.max(0, now - createdAtMs);
+        const holdMs = minHoldHours * 3600 * 1000;
+        if (elapsedMs < holdMs) {
+          const waitMinutes = Math.min(minHoldHours * 60, Math.ceil((holdMs - elapsedMs) / 60000));
           throw new BadRequestException(
             `Để tránh spam đổi Proxy và giữ ổn định hệ thống, Slot vừa thuê phải hoạt động tối thiểu ${minHoldHours} giờ mới có thể hủy hoàn tiền (vui lòng đợi thêm ${waitMinutes} phút)!`
           );
@@ -129,7 +131,9 @@ class CancelSlotUseCase {
       });
 
       // Đánh dấu slot đã xóa và giải phóng ghế proxy
+      // QUAN TRỌNG: Đã hoàn tiền cho toàn bộ thời gian còn lại nên thời hạn thuê phải kết thúc ngay tại thời điểm now
       account.deletedAt = new Date(now);
+      account.rentalExpiresAt = new Date(now);
       account.proxyId = null;
 
       // 4. DATABASE TRANSACTION: Thực thi trọn gói tất cả các thao tác DB
@@ -169,12 +173,6 @@ class CancelSlotUseCase {
         } catch (e) {
           console.warn(`[CancelSlotUseCase] Cảnh báo dọn RMS [${account.id}]:`, e.message);
         }
-      }
-
-      if (this.sseEventBus) {
-        try {
-          this.sseEventBus.broadcast('bot-status-changed', { timestamp: Date.now() });
-        } catch (e) {}
       }
 
       return {

@@ -187,9 +187,22 @@ class RmsWriter {
               const payloadOffset = 2 + nLen + 20 + 4;
               if (buf.length >= payloadOffset + 28) {
                 xuBanDau = buf.readInt32BE(payloadOffset);
-                startedTs = buf.readBigInt64BE(payloadOffset + 4);
+                const oldStartedTs = buf.readBigInt64BE(payloadOffset + 4);
                 if (upDays === undefined) curUpDays = buf.readInt32BE(payloadOffset + 12);
                 if (targetCoins === undefined) curTargetCoins = buf.readInt32BE(payloadOffset + 16);
+
+                // Nếu chu kỳ ngày up cũ đã hết hạn trong quá khứ hoặc upDays thay đổi, reset startedTs về hiện tại
+                const nowTs = BigInt(Date.now());
+                if (curUpDays > 0) {
+                  const expireTs = oldStartedTs + BigInt(curUpDays) * 86400000n;
+                  if (nowTs >= expireTs) {
+                    startedTs = nowTs;
+                  } else {
+                    startedTs = oldStartedTs;
+                  }
+                } else {
+                  startedTs = oldStartedTs > 0n ? oldStartedTs : nowTs;
+                }
               }
             }
           } catch (e) {}
@@ -238,23 +251,20 @@ class RmsWriter {
         const genericCoinBuf = this.buildRecordStore('chip_Coin', coinPayload);
         fs.writeFileSync(path.join(suiteDir, 'chip_Coin.rs'), genericCoinBuf);
 
-        // Reset Data timestamps to now
-        const dataFileUser = path.join(suiteDir, `chip_${cleanUser}Data.rs`);
-        if (fs.existsSync(dataFileUser)) {
-          try {
-            const buf = fs.readFileSync(dataFileUser);
-            if (buf.length >= 2) {
-              const nLen = buf.readUInt16BE(0);
-              const payloadOffset = 2 + nLen + 20 + 4;
-              if (buf.length >= payloadOffset + 28) {
-                const now = BigInt(Date.now());
-                buf.writeBigInt64BE(now, payloadOffset + 4); // startedTs
-                buf.writeBigInt64BE(now, payloadOffset + 20); // lastUpdateTs
-                fs.writeFileSync(dataFileUser, buf);
-              }
-            }
-          } catch (e) {}
-        }
+        // Reset Data: đặt targetCoins = 0, upDays = 0, reset timestamps về hiện tại
+        const now = BigInt(Date.now());
+        const dataPayload = Buffer.alloc(28);
+        dataPayload.writeInt32BE(0, 0);          // xuBanDau = 0
+        dataPayload.writeBigInt64BE(now, 4);      // startedTs = now
+        dataPayload.writeInt32BE(0, 12);         // upDays = 0
+        dataPayload.writeInt32BE(0, 16);         // targetCoins = 0
+        dataPayload.writeBigInt64BE(now, 20);     // lastUpdateTs = now
+
+        const userDataBuf = this.buildRecordStore(`chip_${cleanUser}Data`, dataPayload);
+        fs.writeFileSync(path.join(suiteDir, `chip_${cleanUser}Data.rs`), userDataBuf);
+
+        const genericDataBuf = this.buildRecordStore('chip_Data', dataPayload);
+        fs.writeFileSync(path.join(suiteDir, 'chip_Data.rs'), genericDataBuf);
       }
     } catch (err) {
       console.error(`[RmsWriter] Lỗi reset RMS Up Thuê cho ${account.username}:`, err.message);

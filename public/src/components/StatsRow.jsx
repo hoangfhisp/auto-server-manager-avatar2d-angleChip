@@ -16,7 +16,9 @@ window.StatsRow = function StatsRow({ uptimeFormatted, status }) {
   return (
     <section className="stats-row">
       <div className="stat-card">
-        <div className="stat-icon">⏱️</div>
+        <div className="stat-icon">
+          <window.Icon name="timer" size={22} color="var(--apple-blue)" />
+        </div>
         <div className="stat-content">
           <span className="stat-label">Thời Gian Treo</span>
           <span className="stat-value">{uptimeFormatted}</span>
@@ -24,7 +26,9 @@ window.StatsRow = function StatsRow({ uptimeFormatted, status }) {
       </div>
 
       <div className="stat-card">
-        <div className="stat-icon">☕</div>
+        <div className="stat-icon">
+          <window.Icon name="coffee" size={22} color="var(--apple-gold)" />
+        </div>
         <div className="stat-content">
           <span className="stat-label">Môi Trường Java</span>
           <span className="stat-value text-truncate" title={status?.java?.version || ''}>
@@ -34,7 +38,9 @@ window.StatsRow = function StatsRow({ uptimeFormatted, status }) {
       </div>
 
       <div className="stat-card">
-        <div className="stat-icon">💾</div>
+        <div className="stat-icon">
+          <window.Icon name="ram" size={22} color="var(--apple-purple)" />
+        </div>
         <div className="stat-content">
           <span className="stat-label">Bộ Nhớ RAM</span>
           <span className="stat-value" style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
@@ -47,7 +53,9 @@ window.StatsRow = function StatsRow({ uptimeFormatted, status }) {
       </div>
 
       <div className="stat-card">
-        <div className="stat-icon">⚡</div>
+        <div className="stat-icon">
+          <window.Icon name="zap" size={22} color="var(--apple-green)" />
+        </div>
         <div className="stat-content">
           <span className="stat-label">Nick Đang Treo</span>
           <span className="stat-value">{runningCount} nick online</span>

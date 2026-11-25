@@ -25,25 +25,95 @@ window.TerminalConsole = function TerminalConsole({
     if (text.includes('💬') || text.includes('[POPUP GAME]')) return 'popup';
     if (text.includes('🔄') || text.includes('[TỰ ĐỘNG ĐĂNG NHẬP') || text.includes('khởi động lại') || text.includes('RESET DỮ LIỆU')) return 'retry';
     if (type === 'success' || text.includes('✅') || text.includes('🎉') || text.includes('THÀNH CÔNG') || text.includes('HOÀN THÀNH') || text.includes('MỤC TIÊU')) return 'success';
+    if (text.includes('💎') || text.includes('KIM CƯƠNG') || text.includes('Đào Khoáng') || text.includes('KCX') || text.includes('NHB') || text.includes('🪨') || text.includes('BÁN ĐÁ') || text.includes('Bán Đá')) return 'diamond';
+    if (text.includes('🎣') || text.includes('CÂU CÁ') || text.includes('cần câu') || text.includes('vé câu') || text.includes('cá cắn') || text.includes('Câu Cá')) return 'fish';
     if (text.includes('🌾') || text.includes('FARM') || text.includes('nông trại') || text.includes('chăm farm') || text.includes('thu hoạch') || text.includes('Về Farm') || text.includes('Nông sản') || text.includes('Cây trồng')) return 'farm';
-    if (text.includes('💎') || text.includes('KIM CƯƠNG') || text.includes('Đào Khoáng') || text.includes('KCX') || text.includes('NHB') || text.includes('🪨') || text.includes('BÁN ĐÁ')) return 'diamond';
-    if (text.includes('🎣') || text.includes('CÂU CÁ') || text.includes('cần câu') || text.includes('vé câu') || text.includes('cá cắn')) return 'fish';
     if (type === 'info' || text.includes('🚀') || text.includes('[QUY TRÌNH]') || text.includes('Đang kết nối') || text.includes('PROXY SETUP') || text.includes('🔍') || text.includes('DIAGNOSTIC')) return 'info';
     if (type === 'system' || text.includes('[System]')) return 'system';
     return type || 'out';
   };
 
-  const renderLogMessage = (text = '') => {
-    const match = text.match(/^(\[[^\]]+\])\s*(.*)$/);
-    if (match) {
-      return (
-        <>
-          <span className="log-user-badge">{match[1].replace(/\[|\]/g, '')}</span>
-          <span>{match[2]}</span>
-        </>
-      );
+  const getTagBadge = (text = '', type = '') => {
+    const lower = text.toLowerCase();
+    if (lower.includes('đăng nhập thành công') || lower.includes('vào game thành công') || lower.includes('đang treo online')) {
+      return { tag: 'ONLINE', className: 'log-tag-success' };
     }
-    return text;
+    if (type === 'event' || lower.includes('sự kiện') || lower.includes('🎁') || lower.includes('[sự kiện') || lower.includes('vật phẩm') || lower.includes('event')) {
+      return { tag: 'SỰ KIỆN', className: 'log-tag-event' };
+    }
+    if (lower.includes('kim cương') || lower.includes('đào khoáng') || lower.includes('bán đá') || lower.includes('kcx') || lower.includes('nhb') || lower.includes('💎') || lower.includes('🪨')) {
+      return { tag: 'ĐÁ/KC', className: 'log-tag-ore' };
+    }
+    if (lower.includes('câu cá') || lower.includes('mua vé') || lower.includes('vé câu') || lower.includes('giật cần') || lower.includes('cá cắn') || lower.includes('🎣')) {
+      return { tag: 'CÂU CÁ', className: 'log-tag-fish' };
+    }
+    if (lower.includes('em bé') || lower.includes('chăm em bé') || lower.includes('👶')) {
+      return { tag: 'BABY', className: 'log-tag-ore' };
+    }
+    if (lower.includes('chuyển map') || lower.includes('giữ kết nối') || lower.includes('🗺️') || lower.includes('📡') || lower.includes('duy trì kết nối')) {
+      return { tag: 'KẾT NỐI', className: 'log-tag-network' };
+    }
+    if (lower.includes('auto farm') || lower.includes('chăm sóc') || lower.includes('thu hoạch') || lower.includes('gieo hạt') || lower.includes('nông trại') || lower.includes('🌾')) {
+      return { tag: 'FARM', className: 'log-tag-farm' };
+    }
+    if (type === 'error' || type === 'err' || lower.includes('mất kết nối') || lower.includes('lỗi') || lower.includes('bảo trì') || lower.includes('❌') || lower.includes('⚠️')) {
+      return { tag: 'LỖI', className: 'log-tag-error' };
+    }
+    if (type === 'info' || lower.includes('kết nối') || lower.includes('đăng nhập') || lower.includes('máy chủ') || lower.includes('quy trình') || lower.includes('proxy') || lower.includes('🚀') || lower.includes('chờ kết nối lại') || lower.includes('📡') || lower.includes('duy trì')) {
+      return { tag: 'KẾT NỐI', className: 'log-tag-network' };
+    }
+    return { tag: 'BOT', className: 'log-tag-bot' };
+  };
+
+  const parseTerminalLog = (log) => {
+    let rawText = String(log.text || '').trim();
+    let username = log.username || '';
+    let cleanText = rawText;
+
+    const bracketMatch = cleanText.match(/^\[([a-zA-Z0-9_.-]{3,25})\]\s*(.*)$/);
+    if (bracketMatch) {
+      username = bracketMatch[1];
+      cleanText = bracketMatch[2];
+    }
+
+    if (cleanText.startsWith('QUY TRÌNH->')) {
+      cleanText = cleanText.replace(/^QUY TRÌNH->\s*/, '');
+    }
+
+    const tagBadge = getTagBadge(cleanText || rawText, log.type);
+
+    return { username, text: cleanText, tagBadge };
+  };
+
+  const renderLogMessage = (rawText = '') => {
+    if (!rawText) return '';
+    const emojiRegex = /(🎁|🌾|👶|✅|💬|🔄|⏳|⏹️|⏹|🚀|❌|⚠️|🎣|💎|🪨|📡|🗺️)/g;
+    const parts = rawText.split(emojiRegex);
+    if (parts.length <= 1) return rawText;
+
+    return (
+      <span>
+        {parts.map((part, i) => {
+          if (part === '🎁') return <window.Icon key={i} name="gift" size={13} color="#e599ff" className="log-inline-icon" />;
+          if (part === '🌾') return <window.Icon key={i} name="wheat" size={13} color="var(--apple-green)" className="log-inline-icon" />;
+          if (part === '👶') return <window.Icon key={i} name="baby" size={13} color="var(--apple-orange)" className="log-inline-icon" />;
+          if (part === '✅') return <window.Icon key={i} name="checkCircle" size={13} color="var(--apple-green)" className="log-inline-icon" />;
+          if (part === '💬') return <window.Icon key={i} name="message" size={13} color="var(--apple-gold)" className="log-inline-icon" />;
+          if (part === '🔄') return <window.Icon key={i} name="refresh" size={13} color="var(--apple-orange)" className="log-inline-icon" />;
+          if (part === '⏳') return <window.Icon key={i} name="clock" size={13} color="var(--apple-orange)" className="log-inline-icon" />;
+          if (part === '⏹️' || part === '⏹') return <window.Icon key={i} name="stop" size={13} color="var(--apple-red)" className="log-inline-icon" />;
+          if (part === '🚀') return <window.Icon key={i} name="zap" size={13} color="var(--apple-blue)" className="log-inline-icon" />;
+          if (part === '❌') return <window.Icon key={i} name="xCircle" size={13} color="var(--apple-red)" className="log-inline-icon" />;
+          if (part === '⚠️') return <window.Icon key={i} name="alertTriangle" size={13} color="var(--apple-orange)" className="log-inline-icon" />;
+          if (part === '🎣') return <window.Icon key={i} name="fish" size={13} color="var(--apple-teal)" className="log-inline-icon" />;
+          if (part === '💎') return <window.Icon key={i} name="diamond" size={13} color="var(--apple-purple)" className="log-inline-icon" />;
+          if (part === '🪨') return <window.Icon key={i} name="rock" size={13} color="var(--apple-orange)" className="log-inline-icon" />;
+          if (part === '📡') return <window.Icon key={i} name="network" size={13} color="var(--apple-blue)" className="log-inline-icon" />;
+          if (part === '🗺️') return <window.Icon key={i} name="map" size={13} color="var(--apple-blue)" className="log-inline-icon" />;
+          return part;
+        })}
+      </span>
+    );
   };
 
   const [isScrolledUp, setIsScrolledUp] = React.useState(false);
@@ -183,11 +253,16 @@ window.TerminalConsole = function TerminalConsole({
           ) : (
             logs.map((l, idx) => {
               const logClass = classifyLog(l.type, l.text);
+              const { username, text, tagBadge } = parseTerminalLog(l);
               const key = l.id || `${l.timestamp || ''}-${idx}-${(l.text || '').slice(0, 15)}`;
               return (
                 <div key={key} className={`log-item log-${logClass}`}>
                   <span className="log-time">[{l.timestamp || '--:--:--'}]</span>
-                  <span className="log-msg">{renderLogMessage(l.text)}</span>
+                  <span className={`log-tag-badge ${tagBadge.className}`}>{tagBadge.tag}</span>
+                  {username && (
+                    <span className="log-user-badge">[{username}]</span>
+                  )}
+                  <span className="log-msg">{renderLogMessage(text)}</span>
                 </div>
               );
             })

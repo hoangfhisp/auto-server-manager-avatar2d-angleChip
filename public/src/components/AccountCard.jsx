@@ -87,12 +87,13 @@ window.AccountCard = function AccountCard({
   }, []);
 
   const proxyExpiresAt = (proxyObj && proxyObj.expiresAt) || account.proxyExpiresAt || null;
-  const isRentedAccount = Boolean(account.rentalPlan || account.userId);
-  const expiryDate = (isRentedAccount && account.rentalExpiresAt) ? account.rentalExpiresAt : (proxyExpiresAt || account.rentalExpiresAt || null);
+  const isRentedAccount = Boolean(account.rentalPlan);
+  // Chỉ hiển thị đếm ngược hết hạn đối với tài khoản thuê của khách hàng (có rentalPlan và rentalExpiresAt)
+  const expiryDate = (isRentedAccount && account.rentalExpiresAt) ? account.rentalExpiresAt : null;
   const countdown = (window.formatCountdown || window.formatters?.formatCountdown)
     ? (window.formatCountdown || window.formatters?.formatCountdown)(expiryDate, now)
     : null;
-  const isRentalExpired = Boolean(account.rentalExpiresAt && new Date(account.rentalExpiresAt).getTime() < now);
+  const isRentalExpired = Boolean(isRentedAccount && account.rentalExpiresAt && new Date(account.rentalExpiresAt).getTime() < now);
 
   return (
     <div
@@ -128,6 +129,11 @@ window.AccountCard = function AccountCard({
                   </span>
                 )}
                 <span className={`status-dot ${account.isEmptySlot || !account.username ? 'idle' : statusType}`} title={account.isEmptySlot || !account.username ? 'Chờ gắn nick' : statusLabel}></span>
+                {(accountState.state === 'target_reached' || accountState.isCompleted) && (
+                  <span className="btn-xs acc-badge-target-reached" style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', padding: '1px 6px', borderRadius: '10px', fontSize: '0.68rem', fontWeight: 600, background: 'rgba(255, 214, 10, 0.15)', color: 'var(--apple-gold)', border: '1px solid rgba(255, 214, 10, 0.3)' }} title={accountState.message || 'Đã hoàn thành mục tiêu!'}>
+                    <window.Icon name="trophy" size={11} color="var(--apple-gold)" /> Đạt mục tiêu
+                  </span>
+                )}
               </div>
 
               {/* Real-time Expiration Countdown Badge (Proxy / Thuê) */}

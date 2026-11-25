@@ -150,6 +150,19 @@ window.AccountModal = function AccountModal({
   const [ipSlot, setIpSlot] = useAccModalState(account?.ipSlot !== undefined ? String(account?.ipSlot) : String(defaultIpSlot || 1));
   const [fieldErrors, setFieldErrors] = useAccModalState({});
 
+  // Đồng bộ lại toàn bộ form khi mở modal cho account mới hoặc sửa account khác
+  useAccModalEffect(() => {
+    setFileId(account?.fileId || activeFileId || 'file_1');
+    setProxyId(account?.proxyId || '');
+    setUsername(account?.username || '');
+    setPassword('');
+    setShowPassword(false);
+    setServerId(account?.serverId !== undefined ? String(account.serverId) : '0');
+    setNote(account?.note || '');
+    setIpSlot(account?.ipSlot !== undefined ? String(account?.ipSlot) : String(defaultIpSlot || 1));
+    setFieldErrors({});
+  }, [account, activeFileId, defaultIpSlot]);
+
   const clearFieldError = (fieldName) => {
     setFieldErrors(prev => {
       if (!prev || !prev[fieldName]) return prev;
@@ -221,7 +234,7 @@ window.AccountModal = function AccountModal({
     }
 
     if (!isUser) {
-      if (!resolvedFileId) {
+      if (!fileId) {
         feErrors.fileId = 'Vui lòng chọn File hồ sơ hợp lệ!';
       }
       const chosenProxy = proxies.find(p => p.id === proxyId);
@@ -243,8 +256,8 @@ window.AccountModal = function AccountModal({
       proxyId: isUser ? (account?.proxyId !== undefined ? account.proxyId : proxyId) : (proxyId || null),
       username: username.trim(),
       password,
-      serverId: isUser ? (account?.serverId !== undefined ? account.serverId : sId) : sId,
-      serverName: (isUser ? (account?.serverId === 1 ? 'Diệu Kỳ' : 'Hoàn Mỹ') : (sId === 0 ? 'Hoàn Mỹ' : 'Diệu Kỳ')),
+      serverId: sId,
+      serverName: sId === 0 ? 'Hoàn Mỹ' : 'Diệu Kỳ',
       ipSlot: isUser ? (account?.ipSlot || slotNum || 1) : (slotNum || 1),
       note: note.trim()
     };
