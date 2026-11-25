@@ -4,6 +4,7 @@ const ServerLimitRule = require('../../../domain/rules/ServerLimitRule');
 const ProxyChecker = require('../../../infrastructure/network/ProxyChecker');
 const ProcessRegistry = require('../../../infrastructure/process/ProcessRegistry');
 const { BadRequestException, NotFoundException } = require('../../../domain/errors');
+const { formatLogTimestamp } = require('../../../shared/utils/formatters');
 
 /**
  * StartBotAccountUseCase (Application Layer - Use Case)
@@ -27,7 +28,7 @@ class StartBotAccountUseCase {
     this.allocationEngine = engine;
   }
 
-  async execute(accountId) {
+  async execute(accountId, options = {}) {
     if (this.startingLocks.has(accountId)) {
       return { success: true, message: `Tài khoản đang trong tiến trình khởi chạy, xin chờ...` };
     }
@@ -160,6 +161,14 @@ class StartBotAccountUseCase {
 
     // 8. Instantiate SingleBotProcess with injected Proxy entity
     const botProcess = new SingleBotProcess(account, fileProfile, config, proxy);
+    if (options && options.restoreAutoType) {
+      botProcess.autoState = {
+        isRunning: true,
+        autoType: options.restoreAutoType,
+        status: 'running',
+        message: `Khôi phục ${botProcess.getFriendlyName(options.restoreAutoType)}...`
+      };
+    }
 
     botProcess.on('log', (entry) => {
       this.sseEventBus.addLog(entry);
@@ -178,6 +187,13 @@ class StartBotAccountUseCase {
     botProcess.on('auto-status', (data) => {
       this.multiBotManager.processRegistry.update(accountId, { autoState: data.autoState });
       this.sseEventBus.broadcast('bot-auto-status', data);
+      if (data.autoState) {
+        if (data.autoState.isRunning && data.autoState.autoType && !data.autoState.subTask) {
+          this.multiBotManager.persistAutoState(accountId, data.autoState.autoType).catch(() => {});
+        } else if (data.autoState.status === 'finished' || data.autoState.finished || (!data.autoState.isRunning && data.autoState.status === 'idle')) {
+          this.multiBotManager.persistAutoState(accountId, null).catch(() => {});
+        }
+      }
     });
 
     botProcess.on('event-status', (data) => {
@@ -191,7 +207,7 @@ class StartBotAccountUseCase {
 
     botProcess.on('process-error', (errData) => {
       this.sseEventBus.addLog({
-        timestamp: new Date().toLocaleTimeString('vi-VN', { hour12: false }),
+        timestamp: formatLogTimestamp(),
         type: 'error',
         accountId,
         text: `❌ Lỗi tiến trình bot: ${errData.error?.message || errData.error}`

@@ -4,6 +4,7 @@ const fs = require('fs');
 const EventEmitter = require('events');
 const ProxyChecker = require('../network/ProxyChecker');
 const BotIpcProtocol = require('./BotIpcProtocol');
+const { formatLogTimestamp } = require('../../shared/utils/formatters');
 
 /**
  * SingleBotProcess (Infrastructure Layer)
@@ -389,9 +390,12 @@ class SingleBotProcess extends EventEmitter {
 
         const isTargetReached = Boolean(this.accountState && (this.accountState.state === 'target_reached' || this.accountState.isCompleted));
         const wasManual = this.isManualStop;
+        const isPermanentError = Boolean(code === 2 || (this.accountState && (this.accountState.state === 'auth_error' || this.accountState.state === 'account_locked' || this.accountState.state === 'proxy_expired')));
 
         if (isTargetReached) {
           this.emitLog('success', `🏆 [${this.account.username}] Tiến trình bot đã dừng sau khi hoàn thành mục tiêu.`);
+        } else if (isPermanentError) {
+          this.emitLog('error', `🛑 [${this.account.username}] Dừng bot do lỗi xác thực / tài khoản bị khóa / proxy hết hạn (Mã thoát: ${code}).`);
         } else if (wasManual) {
           this.emitLog('info', `⏹️ [${this.account.username}] Tiến trình bot đã dừng.`);
         } else if (code === 0) {
@@ -405,7 +409,7 @@ class SingleBotProcess extends EventEmitter {
         this.lifecycleState = 'STOPPED';
         this.emit('stopped', { accountId: this.account.id, code, wasManual, isTargetReached });
 
-        if (!wasManual && !isTargetReached && this.globalConfig.autoRestart) {
+        if (!wasManual && !isTargetReached && !isPermanentError && this.globalConfig.autoRestart) {
           this.scheduleRestart(javaBin);
         }
       });
@@ -447,6 +451,15 @@ class SingleBotProcess extends EventEmitter {
           ...parsed.accountStatusUpdate
         };
         this.emit('account-status', { accountId: this.account.id, state: this.accountState });
+
+        if (parsed.accountStatusUpdate.state === 'auth_error' || parsed.accountStatusUpdate.state === 'account_locked') {
+          this.isManualStop = true;
+          setTimeout(() => {
+            if (this.child) {
+              this.stop(true);
+            }
+          }, 2500);
+        }
       }
 
       if (parsed.isTargetReached) {
@@ -581,7 +594,7 @@ class SingleBotProcess extends EventEmitter {
   }
 
   emitLog(type, text) {
-    const timestamp = new Date().toLocaleTimeString('vi-VN', { hour12: false });
+    const timestamp = formatLogTimestamp();
     const logEntry = {
       timestamp,
       type,
@@ -594,6 +607,10 @@ class SingleBotProcess extends EventEmitter {
 
   scheduleRestart(javaBin) {
     if (this.accountState && (this.accountState.state === 'target_reached' || this.accountState.isCompleted)) {
+      return;
+    }
+    if (this.accountState && (this.accountState.state === 'auth_error' || this.accountState.state === 'account_locked')) {
+      this.emitLog('error', `🛑 [${this.account.username}] Dừng tự động kết nối lại vì lỗi xác thực tài khoản hoặc tài khoản bị khóa!`);
       return;
     }
     if (this.accountState && this.accountState.state === 'proxy_expired') {
@@ -824,13 +841,16 @@ class SingleBotProcess extends EventEmitter {
           this.child.stdin.write(`START_AUTO ${autoType}\n`);
 
           const friendlyName = this.getFriendlyName(autoType);
+          const isOnline = Boolean(this.accountState && this.accountState.state === 'online');
 
           if (isParentRunning && isTargetSubTask) {
             this.autoState = {
               ...this.autoState,
               subTask: autoType,
-              status: 'running',
-              message: `Đang tạm chuyển sang ${friendlyName} (từ ${this.getFriendlyName(this.autoState.autoType)})...`
+              status: isOnline ? 'running' : 'pending',
+              message: isOnline
+                ? `Đang tạm chuyển sang ${friendlyName} (từ ${this.getFriendlyName(this.autoState.autoType)})...`
+                : `Đang chờ vào game để chạy ${friendlyName}...`
             };
           } else {
             this.account.lastAutoType = autoType;
@@ -838,12 +858,15 @@ class SingleBotProcess extends EventEmitter {
               isRunning: true,
               autoType,
               subTask: null,
-              status: 'running',
-              message: `Đang chạy ${friendlyName}...`
+              status: isOnline ? 'running' : 'pending',
+              message: isOnline ? `Đang chạy ${friendlyName}...` : `Đang chờ vào game để chạy ${friendlyName}...`
             };
           }
         } else if (action === 'stop') {
           this.child.stdin.write(`STOP_AUTO ${autoType}\n`);
+          if (autoType === 'all' || !this.autoState?.subTask || this.autoState?.autoType === autoType) {
+            this.account.lastAutoType = null;
+          }
 
           // Nếu chỉ dừng subtask khi auto lớn đang chạy -> quay lại auto lớn, không tắt tiến trình auto!
           if (this.autoState && this.autoState.isRunning && this.autoState.subTask &&
