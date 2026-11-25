@@ -106,8 +106,7 @@ class DatabaseMigrator {
     // Thêm indexes
     for (const idx of indexes) {
       const cols = idx.columns.map(c => `\`${c}\``).join(', ');
-      const idxKeyword = idx.unique ? 'UNIQUE INDEX' : 'INDEX';
-      colDefs.push(`${idxKeyword} \`${idx.name}\` (${cols})`);
+      colDefs.push(`INDEX \`${idx.name}\` (${cols})`);
     }
 
     // Thêm foreign keys
@@ -157,10 +156,9 @@ class DatabaseMigrator {
     for (const idx of indexes) {
       if (!existingIndexNames.has(idx.name)) {
         const cols = idx.columns.map(c => `\`${c}\``).join(', ');
-        const indexType = idx.unique ? 'CREATE UNIQUE INDEX' : 'CREATE INDEX';
-        const addIdxSql = `${indexType} \`${idx.name}\` ON \`${tableName}\` (${cols})`;
+        const addIdxSql = `CREATE INDEX \`${idx.name}\` ON \`${tableName}\` (${cols})`;
         await pool.query(addIdxSql);
-        console.log(`  + [${indexType}] Đã tạo index [${idx.name}] trên bảng [${tableName}].`);
+        console.log(`  + [CREATE INDEX] Đã tạo index [${idx.name}] trên bảng [${tableName}].`);
       }
     }
   }

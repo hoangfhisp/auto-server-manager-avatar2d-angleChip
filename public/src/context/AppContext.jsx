@@ -28,11 +28,9 @@ window.AppProvider = function AppProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(() => window.ApiClient.getCurrentUser());
   const [isAuthenticated, setIsAuthenticated] = useState(() => !!(window.tokenManager && window.tokenManager.getAccessToken()));
   const [isAuthLoading, setIsAuthLoading] = useState(true);
-  const isAdmin = Boolean(currentUser && String(currentUser.role || '').toLowerCase() === 'admin');
 
   const sseRef = useRef(null);
   const terminalRef = useRef(null);
-  const lastFetchAccountsTimeRef = useRef(0);
 
   // Check session via HttpOnly Cookie refresh on mount
   useEffect(() => {
@@ -148,15 +146,6 @@ window.AppProvider = function AppProvider({ children }) {
     // Listen to unauthorized event
     const handleUnauthorized = () => {
       if (isMounted) {
-        if (sseRef.current) {
-          try { sseRef.current.close(); } catch (e) {}
-          sseRef.current = null;
-        }
-        setAccounts([]);
-        setFiles([]);
-        setProxies([]);
-        setLogs([]);
-        setStatus(null);
         setIsAuthenticated(false);
         setCurrentUser(null);
         window.ApiClient.setCurrentUser(null);
@@ -174,12 +163,6 @@ window.AppProvider = function AppProvider({ children }) {
     if (token && window.tokenManager) {
       window.tokenManager.setAccessToken(token);
     }
-    // Clean old state immediately to prevent ghost accounts across user sessions
-    setAccounts([]);
-    setFiles([]);
-    setProxies([]);
-    setLogs([]);
-    setStatus(null);
     setCurrentUser(user);
     setIsAuthenticated(true);
     if (user) window.ApiClient.setCurrentUser(user);
@@ -189,15 +172,6 @@ window.AppProvider = function AppProvider({ children }) {
     try {
       if (window.authService) await window.authService.logout();
     } catch (e) { }
-    if (sseRef.current) {
-      try { sseRef.current.close(); } catch (e) {}
-      sseRef.current = null;
-    }
-    setAccounts([]);
-    setFiles([]);
-    setProxies([]);
-    setLogs([]);
-    setStatus(null);
     setCurrentUser(null);
     setIsAuthenticated(false);
     window.ApiClient.setCurrentUser(null);
@@ -215,7 +189,6 @@ window.AppProvider = function AppProvider({ children }) {
 
   // Fetchers
   const fetchStatus = useCallback(async () => {
-    if (!isAdmin) return;
     try {
       const data = await window.ApiClient.getStatus();
       if (data.success) {
@@ -223,10 +196,9 @@ window.AppProvider = function AppProvider({ children }) {
         setActiveFileId(prev => (prev ? prev : (data.activeFileId || 'file_1')));
       }
     } catch (e) { }
-  }, [isAdmin]);
+  }, []);
 
   const fetchFiles = useCallback(async () => {
-    if (!isAdmin) return;
     try {
       const data = await window.ApiClient.getFiles();
       if (data.success) {
@@ -234,24 +206,18 @@ window.AppProvider = function AppProvider({ children }) {
         setActiveFileId(prev => (prev ? prev : (data.activeFileId || (data.files && data.files[0] ? data.files[0].id : 'file_1'))));
       }
     } catch (e) { }
-  }, [isAdmin]);
+  }, []);
 
   const fetchProxies = useCallback(async () => {
-    if (!isAdmin) return;
     try {
       const data = await window.ApiClient.getProxies();
       if (data.success) {
         setProxies(data.proxies || []);
       }
     } catch (e) { }
-  }, [isAdmin]);
+  }, []);
 
-  const fetchAccounts = useCallback(async (immediate = false) => {
-    const now = Date.now();
-    if (!immediate && (now - lastFetchAccountsTimeRef.current < 400)) {
-      return;
-    }
-    lastFetchAccountsTimeRef.current = now;
+  const fetchAccounts = useCallback(async () => {
     try {
       const data = await window.ApiClient.getAccounts();
       if (data.success) {
@@ -261,40 +227,33 @@ window.AppProvider = function AppProvider({ children }) {
   }, []);
 
   const fetchJars = useCallback(async () => {
-    if (!isAdmin) return;
     try {
       const data = await window.ApiClient.getAvailableJars();
       if (data.success) setAvailableJars(data.jars || []);
     } catch (e) { }
-  }, [isAdmin]);
+  }, []);
 
   const fetchLogs = useCallback(async () => {
-    if (!isAdmin) return;
     try {
       const data = await window.ApiClient.getLogs();
       if (data.success) setLogs(data.logs || []);
     } catch (e) { }
-  }, [isAdmin]);
+  }, []);
 
   // SSE Stream & Synchronization
   useEffect(() => {
-    if (!isAuthenticated || !currentUser) return;
+    if (!isAuthenticated) return;
 
-    const isAdmin = String(currentUser.role || '').toLowerCase() === 'admin';
+    const isAdmin = currentUser && String(currentUser.role || '').toLowerCase() === 'admin';
 
-    // Always fetch fresh status and accounts for the active authenticated user
-    fetchStatus();
-    fetchAccounts();
+    if (!status) fetchStatus();
+    if (!accounts || accounts.length === 0) fetchAccounts();
 
     if (isAdmin) {
-      fetchFiles();
-      fetchProxies();
-      fetchJars();
+      if (!files || files.length === 0) fetchFiles();
+      if (!proxies || proxies.length === 0) fetchProxies();
+      if (!availableJars || availableJars.length === 0) fetchJars();
       fetchLogs();
-    } else {
-      setFiles([]);
-      setProxies([]);
-      setLogs([]);
     }
 
     const connectSSE = () => {
@@ -309,17 +268,13 @@ window.AppProvider = function AppProvider({ children }) {
         } catch (err) { }
       });
 
-      let botStatusTimer = null;
       es.addEventListener('bot-status-changed', () => {
-        if (botStatusTimer) clearTimeout(botStatusTimer);
-        botStatusTimer = setTimeout(() => {
-          fetchAccounts();
-          if (isAdmin) {
-            fetchStatus();
-            fetchFiles();
-            fetchProxies();
-          }
-        }, 120);
+        fetchAccounts();
+        fetchStatus();
+        if (isAdmin) {
+          fetchFiles();
+          fetchProxies();
+        }
       });
 
       es.addEventListener('proxy-status-changed', () => {
@@ -674,13 +629,11 @@ window.AppProvider = function AppProvider({ children }) {
       const doCancelSlot = async () => {
         try {
           const res = await window.rentalService.cancelSlot(id);
-          if (res && (res.data || res.success)) {
-            setAccounts(prev => prev.filter(acc => acc.id !== id));
-            if (isAdmin) {
-              fetchFiles();
-              fetchProxies();
-            }
-            window.dispatchEvent(new CustomEvent('balance:updated', { detail: res.data || res }));
+          if (res && res.data) {
+            fetchAccounts();
+            fetchFiles();
+            fetchProxies();
+            if (fetchBalance) fetchBalance();
             if (window.showAlert) {
               window.showAlert(res.message || 'Đã hủy slot và hoàn tiền về ví thành công!', 'Hủy Slot Thành Công', 'success');
             }

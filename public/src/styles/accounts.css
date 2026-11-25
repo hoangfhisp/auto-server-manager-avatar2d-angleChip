@@ -1255,24 +1255,6 @@
 .btn-auto-trigger {
   width: 100%;
   gap: 4px;
-  border: 1px solid var(--glass-border);
-  transition: all 0.2s ease;
-}
-
-[data-theme="light"] .btn-auto-trigger {
-  border: 1px solid rgba(0, 0, 0, 0.12);
-  background: #ffffff;
-}
-
-[data-theme="light"] .btn-auto-trigger:hover {
-  border-color: rgba(0, 0, 0, 0.22);
-  background: #f0f0f2;
-}
-
-[data-theme="light"] .btn-auto-trigger.btn-active {
-  background: rgba(0, 113, 227, 0.1);
-  border-color: var(--apple-blue);
-  color: var(--apple-blue);
 }
 
 .btn-settings-trigger {

@@ -39,9 +39,6 @@ class StopBotAccountUseCase {
     }
 
     await this.multiBotManager.persistRunningState();
-    if (typeof this.multiBotManager.persistAutoState === 'function') {
-      await this.multiBotManager.persistAutoState(accountId, null);
-    }
 
     this.sseEventBus.addLog({
       type: 'warn',

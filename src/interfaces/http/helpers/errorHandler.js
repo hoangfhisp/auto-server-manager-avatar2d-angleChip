@@ -1,15 +1,26 @@
 const ErrorResponse = require('../../../application/dtos/common/ErrorResponse');
 const { AppException } = require('../../../domain/errors');
 const config = require('../../../../config');
-const { LoggerFactory } = require('../../../infrastructure/logging/Logger');
+const fs = require('fs');
+const path = require('path');
 
-const logger = LoggerFactory.getLogger('HttpErrorHandler');
+const errorLogDir = path.resolve(process.cwd(), 'logs');
+const errorLogPath = path.join(errorLogDir, 'http-errors.log');
 
 function writeHttpErrorLog(err) {
   try {
-    logger.error('Unhandled Internal Server Error 500:', err);
+    fs.mkdirSync(errorLogDir, { recursive: true });
+    const timestamp = new Date().toISOString();
+    const stack = err && err.stack ? err.stack : (err && err.message ? err.message : String(err));
+    let causeInfo = '';
+    if (err && err.cause) {
+      const c = err.cause;
+      const meta = [c.code, c.errno, c.sqlState].filter(Boolean).join(' / ');
+      causeInfo = `\nCaused by: ${meta ? `[${meta}] ` : ''}${c.stack || c.message || String(c)}`;
+    }
+    fs.appendFileSync(errorLogPath, `\n[${timestamp}] HTTP 500\n${stack}${causeInfo}\n${'='.repeat(80)}\n`, 'utf8');
   } catch (logErr) {
-    console.error('[ErrorFileLogger] Cannot write error log:', logErr.message);
+    console.error('[ErrorFileLogger] Cannot write logs/http-errors.log:', logErr.message);
   }
 }
 

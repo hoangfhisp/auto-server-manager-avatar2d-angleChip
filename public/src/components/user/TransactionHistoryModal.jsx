@@ -40,24 +40,7 @@ window.TransactionHistoryModal = function TransactionHistoryModal({
   const [filterType, setFilterType] = React.useState('ALL');
 
   const scrollContainerRef = React.useRef(null);
-  const sentinelRef = React.useRef(null);
   const requestIdRef = React.useRef(0);
-
-  // Synchronous ref mirrors to eliminate stale closures and duplicate fetches
-  const pageRef = React.useRef(1);
-  const loadingRef = React.useRef(true);
-  const loadingMoreRef = React.useRef(false);
-  const hasMoreRef = React.useRef(true);
-  const filterTypeRef = React.useRef('ALL');
-
-  React.useEffect(() => {
-    pageRef.current = page;
-    loadingRef.current = loading;
-    loadingMoreRef.current = loadingMore;
-    hasMoreRef.current = hasMore;
-    filterTypeRef.current = filterType;
-  }, [page, loading, loadingMore, hasMore, filterType]);
-
   const { formatMoney, formatDateTime } = window.formatters;
 
   // Unified fetch function for initial load, filter change, and infinite scroll
@@ -66,10 +49,8 @@ window.TransactionHistoryModal = function TransactionHistoryModal({
 
     if (isAppend) {
       setLoadingMore(true);
-      loadingMoreRef.current = true;
     } else {
       setLoading(true);
-      loadingRef.current = true;
     }
 
     try {
@@ -104,9 +85,7 @@ window.TransactionHistoryModal = function TransactionHistoryModal({
           }
 
           setPage(targetPage);
-          pageRef.current = targetPage;
           setHasMore(moreAvailable);
-          hasMoreRef.current = moreAvailable;
         }
       }
     } catch (e) {
@@ -115,10 +94,8 @@ window.TransactionHistoryModal = function TransactionHistoryModal({
       if (currentRequestId === requestIdRef.current) {
         if (isAppend) {
           setLoadingMore(false);
-          loadingMoreRef.current = false;
         } else {
           setLoading(false);
-          loadingRef.current = false;
         }
       }
     }
@@ -131,59 +108,27 @@ window.TransactionHistoryModal = function TransactionHistoryModal({
 
   // Tab filter switch with smooth transition and race-condition immunity
   const handleFilterChange = (newType) => {
-    if (filterType === newType || loadingRef.current) return;
+    if (filterType === newType || loading) return;
     setFilterType(newType);
     setPage(1);
-    pageRef.current = 1;
     setHasMore(true);
-    hasMoreRef.current = true;
     if (scrollContainerRef.current) {
       scrollContainerRef.current.scrollTop = 0;
     }
     fetchPage(1, newType, false);
   };
 
-  // High-performance IntersectionObserver for proactive social-style feed prefetching (FB/IG UX)
-  React.useEffect(() => {
-    const sentinel = sentinelRef.current;
-    const rootContainer = scrollContainerRef.current;
-    if (!sentinel || !rootContainer) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const entry = entries[0];
-        if (
-          entry &&
-          entry.isIntersecting &&
-          !loadingRef.current &&
-          !loadingMoreRef.current &&
-          hasMoreRef.current
-        ) {
-          fetchPage(pageRef.current + 1, filterTypeRef.current, true);
-        }
-      },
-      {
-        root: rootContainer,
-        rootMargin: '250px 0px 250px 0px',
-        threshold: 0.01
-      }
-    );
-
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [fetchPage, transactions.length, hasMore]);
-
-  // Fallback scroll handler for rapid mousewheel or environments without full IntersectionObserver root support
+  // Infinite scroll trigger when reaching near bottom of list
   const handleScroll = React.useCallback((e) => {
     const container = e.currentTarget;
     const distanceToBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
 
-    if (distanceToBottom < 200) {
-      if (!loadingRef.current && !loadingMoreRef.current && hasMoreRef.current) {
-        fetchPage(pageRef.current + 1, filterTypeRef.current, true);
+    if (distanceToBottom < 60) {
+      if (!loading && !loadingMore && hasMore) {
+        fetchPage(page + 1, filterType, true);
       }
     }
-  }, [fetchPage]);
+  }, [loading, loadingMore, hasMore, page, filterType, fetchPage]);
 
   const getTypeBadge = (type) => {
     switch (type) {
@@ -319,11 +264,6 @@ window.TransactionHistoryModal = function TransactionHistoryModal({
                 </tbody>
               </table>
             </div>
-
-            {/* Sentinel element observed by IntersectionObserver for proactive social-style feed prefetching */}
-            {hasMore && (
-              <div ref={sentinelRef} className="tx-sentinel" />
-            )}
 
             {/* Spinner when loading next page via infinite scroll */}
             {loadingMore && (

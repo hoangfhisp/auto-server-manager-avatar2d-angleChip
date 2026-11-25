@@ -2,9 +2,6 @@ const AsyncMutex = require('../../shared/utils/AsyncMutex');
 const { uuidv7 } = require('../../shared/utils/uuid');
 const Proxy = require('../../domain/entities/Proxy');
 const ProxyChecker = require('../../infrastructure/network/ProxyChecker');
-const { LoggerFactory } = require('../../infrastructure/logging/Logger');
-
-const logger = LoggerFactory.getLogger('ProxyLifecycleCron');
 
 /**
  * ProxyLifecycleCron (Application Layer - Domain Service)
@@ -44,14 +41,14 @@ class ProxyLifecycleCron {
     }
     // Run an initial check after 5 seconds
     setTimeout(() => {
-      this.runCycle().catch(err => logger.error('Lỗi vòng quét ban đầu:', err));
+      this.runCycle().catch(err => console.error('❌ [ProxyLifecycleCron] Lỗi vòng quét ban đầu:', err.message));
     }, 5000);
 
     this.timer = setInterval(() => {
-      this.runCycle().catch(err => logger.error('Lỗi chu kỳ định kỳ:', err));
+      this.runCycle().catch(err => console.error('❌ [ProxyLifecycleCron] Lỗi chu kỳ định kỳ:', err.message));
     }, intervalMs);
 
-    logger.info(`Đã kích hoạt Cronjob kiểm soát vòng đời Proxy & Waterfall Migration (Chu kỳ: ${Math.round(intervalMs / 60000)} phút).`);
+    console.log(`⏱️ [ProxyLifecycleCron] Đã kích hoạt Cronjob kiểm soát vòng đời Proxy & Waterfall Migration (Chu kỳ: ${Math.round(intervalMs / 60000)} phút).`);
   }
 
   stop() {

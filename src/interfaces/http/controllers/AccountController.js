@@ -451,21 +451,59 @@ class AccountController {
       const allLogs = this.sseEventBus?.getAccountLogs
         ? this.sseEventBus.getAccountLogs(accountId, account.username)
         : (this.sseEventBus?.getLogs ? this.sseEventBus.getLogs() : []);
+      const emulatorPatterns = [
+        /^\t|\s{2,}(at |org\.|com\.|javax?\.|sun\.|[a-zA-Z0-9_$]+\.[a-zA-Z0-9_$]+)/,
+        /\(null:-1\)/i,
+        /:\s*-1\)/i,
+        /Picked up JAVA_TOOL_OPTIONS/i,
+        /org\.microemu|microemu/i,
+        /headless arguments/i,
+        /openJar|loadJar|loadClass/i,
+        /at java\.|at javax\.|at com\.|at org\./i,
+        /Exception in thread|java\.lang\./i,
+        /RecordStoreImpl|Font:|Graphics|MIDlet|UnsatisfiedLinkError|\[B@|\[C@|DeviceDisplay/i,
+        /\[TXR\]|TxRunner|\[CG\]|CoGiao|Bridge\.hidden|\[POP\]\s*hidden popup/i,
+        /(\[.*?\]\s*)?(index|readMapItem|doGetHandler|addElement):\s*\d*/i,
+        /^[=\-─_]{8,}/,
+        /(\[.*?\]\s*)[=\-─_]{8,}/,
+        /AVATAR HEADLESS AUTO-LOGIN/i,
+        /TÀI KHOẢN \(WEB\):|SERVER\s*\(WEB\):|MẬT KHẨU \(WEB\):/i,
+        /\[KIỂM TRA FILE JAR\]/i,
+        /DEBUG/i
+      ];
 
-      // Tối ưu hóa O(1) in-memory lookup: Lấy tối đa 300 dòng log sạch mới nhất trực tiếp từ bộ nhớ
-      const accountLogs = [];
-      const cleanUsername = account.username ? String(account.username).toLowerCase() : null;
+      const sensitivePatterns = [
+        /\[PROXY SETUP\]/i,
+        /\[GIẢ LẬP ANGELCHIP\]/i,
+        /PROXY\s*\(NET\):/i,
+        /\[CÀI ĐẶT AUTO/i,
+        /TÀI KHOẢN \(WEB\):|SERVER\s*\(WEB\):|MẬT KHẨU \(WEB\):/i,
+        /\[KIỂM TRA FILE JAR\]/i,
+        /AVATAR HEADLESS AUTO-LOGIN/i,
+        /^[=\-─_]{8,}/
+      ];
 
-      for (let i = allLogs.length - 1; i >= 0 && accountLogs.length < 300; i--) {
-        const log = allLogs[i];
-        if (!log) continue;
-        const matchesAccount = log.accountId === accountId ||
-          (cleanUsername && log.username && String(log.username).toLowerCase() === cleanUsername) ||
-          (cleanUsername && log.text && log.text.toLowerCase().includes(cleanUsername));
-        if (matchesAccount) {
-          accountLogs.unshift(log);
+      const accountLogs = allLogs.filter(log => {
+        // Must match this account
+        const isMatch = log.accountId === accountId ||
+          (account.username && log.username === account.username) ||
+          (log.text && log.text.includes(account.username));
+        if (!isMatch) return false;
+
+        const text = log.text || '';
+        for (const pattern of sensitivePatterns) {
+          if (pattern.test(text)) return false;
         }
-      }
+
+        // For non-admin users, strictly filter emulator logs and raw stack traces
+        if (!isActualAdmin) {
+          for (const pattern of emulatorPatterns) {
+            if (pattern.test(text)) return false;
+          }
+        }
+
+        return true;
+      });
 
       return sendJson(res, 200, {
         success: true,
@@ -473,7 +511,7 @@ class AccountController {
           id: account.id,
           username: account.username
         },
-        logs: accountLogs
+        logs: accountLogs.slice(-1000)
       });
     } catch (err) {
       return this._sendError(res, sendJson, err);

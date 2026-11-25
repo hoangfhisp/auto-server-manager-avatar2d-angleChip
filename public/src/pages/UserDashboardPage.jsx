@@ -93,6 +93,9 @@ window.UserDashboardPage = function UserDashboardPage() {
   const [policy, setPolicy] = React.useState(() => window.__initialPolicy ?? { bonusTiers: [], payos: { enabled: false } });
   const [payosOrder, setPayosOrder] = React.useState(null);
   const [payosLoading, setPayosLoading] = React.useState(false);
+  const [recentTransactions, setRecentTransactions] = React.useState([]);
+  const [totalTxCount, setTotalTxCount] = React.useState(0);
+  const [loadingRecentTx, setLoadingRecentTx] = React.useState(false);
 
   const { formatMoney, formatDate, formatDateTime, formatExpiration } = window.formatters;
 
@@ -108,16 +111,26 @@ window.UserDashboardPage = function UserDashboardPage() {
     } catch (e) {}
   }, []);
 
-  React.useEffect(() => {
-    const handleBalanceEvent = (e) => {
-      if (e && e.detail && typeof e.detail.newBalance === 'number') {
-        setBalance(e.detail.newBalance);
-      } else {
-        refreshBalance();
+  // Fetch recent transactions for sidebar (4 newest)
+  const fetchRecentTransactions = React.useCallback(async () => {
+    setLoadingRecentTx(true);
+    try {
+      if (window.billingService) {
+        const res = await window.billingService.getTransactions({ page: 1, limit: 4 });
+        if (res && res.data) {
+          const list = Array.isArray(res.data) ? res.data : (res.data.items || []);
+          const total = res.data.pagination?.total ?? (typeof res.data.total === 'number' ? res.data.total : list.length);
+          setTotalTxCount(total);
+          setRecentTransactions(list.slice(0, 4));
+        }
       }
-    };
-    window.addEventListener('balance:updated', handleBalanceEvent);
+    } catch (e) {
+    } finally {
+      setLoadingRecentTx(false);
+    }
+  }, []);
 
+  React.useEffect(() => {
     if (window.__initialBalance === undefined) {
       refreshBalance();
     }
@@ -133,10 +146,6 @@ window.UserDashboardPage = function UserDashboardPage() {
       }
       loadPolicy();
     }
-
-    return () => {
-      window.removeEventListener('balance:updated', handleBalanceEvent);
-    };
   }, [refreshBalance]);
 
 
@@ -181,6 +190,7 @@ window.UserDashboardPage = function UserDashboardPage() {
               console.error('Cancel payos order error:', err);
             }
           }
+          await fetchRecentTransactions();
         })();
 
         // 1. POPUP HỦY GIAO DỊCH: Màu vàng (type: warning)
@@ -229,8 +239,11 @@ window.UserDashboardPage = function UserDashboardPage() {
             }
           }
 
-          // Làm mới số dư chính xác 1 lần
-          await refreshBalance();
+          // Làm mới số dư và lịch sử giao dịch chính xác 1 lần
+          await Promise.all([
+            refreshBalance(),
+            fetchRecentTransactions()
+          ]);
 
           // CHỈ hiển thị popup Thành Công khi Backend xác nhận status === 'PAID'
           if (orderInfo && orderInfo.status === 'PAID') {
@@ -333,13 +346,11 @@ window.UserDashboardPage = function UserDashboardPage() {
     }
   };
 
-  // Filter accounts for current user strictly (defense-in-depth against session overlap)
-  const userAccounts = (accounts || [])
-    .filter(a => currentUser && currentUser.id && a.userId && String(a.userId) === String(currentUser.id))
-    .map(a => ({
-      ...a,
-      isUserView: true
-    }));
+  // Filter accounts for current user
+  const userAccounts = (accounts || []).map(a => ({
+    ...a,
+    isUserView: true
+  }));
 
   // Stats calculation based on user's rented accounts
   const totalRented = userAccounts.length;
@@ -871,11 +882,8 @@ window.UserDashboardPage = function UserDashboardPage() {
             setRenewAccount(null);
           }}
           onRented={(result, isRenew) => {
-            if (result && typeof result.remainingBalance === 'number') {
-              setBalance(result.remainingBalance);
-            } else {
-              refreshBalance();
-            }
+            refreshBalance();
+            fetchRecentTransactions();
             fetchAccounts();
             if (isRenew && showDialog) {
               const newExp = result?.account?.rentalExpiresAt
@@ -899,6 +907,7 @@ window.UserDashboardPage = function UserDashboardPage() {
           currentBalance={balance}
           onClose={() => {
             setHistoryModalOpen(false);
+            fetchRecentTransactions();
           }}
           onOpenTopup={() => handleSelectTab('topup')}
         />

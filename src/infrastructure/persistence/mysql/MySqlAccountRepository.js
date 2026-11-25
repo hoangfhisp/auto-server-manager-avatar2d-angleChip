@@ -137,8 +137,6 @@ class MySqlAccountRepository extends IAccountRepository {
       rentalPlan: entity.rentalPlan || null,
       effectivePriceMonth: entity.effectivePriceMonth !== null && entity.effectivePriceMonth !== undefined ? parseInt(entity.effectivePriceMonth, 10) : null,
       deletedAt: entity.deletedAt ? new Date(entity.deletedAt) : null,
-      createdAt: entity.createdAt ? new Date(entity.createdAt) : new Date(),
-      updatedAt: entity.updatedAt ? new Date(entity.updatedAt) : new Date(),
       farmSettings: entity.farmSettings || {},
       diamondSettings: entity.diamondSettings || {},
       fishSettings: entity.fishSettings || {},
@@ -154,11 +152,10 @@ class MySqlAccountRepository extends IAccountRepository {
 
   async delete(id, connection = null) {
     const db = this._getDb(connection);
-    // Soft delete: Đánh dấu ngày xóa, chấm dứt thời hạn thuê và đồng thời giải phóng ghế Proxy ngay lập tức
+    // Soft delete: Đánh dấu ngày xóa và đồng thời giải phóng ghế Proxy ngay lập tức
     await db.update(accounts)
       .set({
         deletedAt: new Date(),
-        rentalExpiresAt: new Date(),
         proxyId: null
       })
       .where(eq(accounts.id, id));
