@@ -35,6 +35,9 @@ window.TerminalConsole = function TerminalConsole({
 
   const getTagBadge = (text = '', type = '') => {
     const lower = text.toLowerCase();
+    if (lower.includes('đăng nhập thành công') || lower.includes('vào game thành công') || lower.includes('đang treo online')) {
+      return { tag: 'ONLINE', className: 'log-tag-success' };
+    }
     if (type === 'event' || lower.includes('sự kiện') || lower.includes('🎁') || lower.includes('[sự kiện') || lower.includes('vật phẩm') || lower.includes('event')) {
       return { tag: 'SỰ KIỆN', className: 'log-tag-event' };
     }
@@ -47,13 +50,16 @@ window.TerminalConsole = function TerminalConsole({
     if (lower.includes('em bé') || lower.includes('chăm em bé') || lower.includes('👶')) {
       return { tag: 'BABY', className: 'log-tag-ore' };
     }
+    if (lower.includes('chuyển map') || lower.includes('giữ kết nối') || lower.includes('🗺️') || lower.includes('📡') || lower.includes('duy trì kết nối')) {
+      return { tag: 'KẾT NỐI', className: 'log-tag-network' };
+    }
     if (lower.includes('auto farm') || lower.includes('chăm sóc') || lower.includes('thu hoạch') || lower.includes('gieo hạt') || lower.includes('nông trại') || lower.includes('🌾')) {
       return { tag: 'FARM', className: 'log-tag-farm' };
     }
     if (type === 'error' || type === 'err' || lower.includes('mất kết nối') || lower.includes('lỗi') || lower.includes('bảo trì') || lower.includes('❌') || lower.includes('⚠️')) {
       return { tag: 'LỖI', className: 'log-tag-error' };
     }
-    if (type === 'info' || lower.includes('kết nối') || lower.includes('đăng nhập') || lower.includes('máy chủ') || lower.includes('quy trình') || lower.includes('proxy') || lower.includes('🚀')) {
+    if (type === 'info' || lower.includes('kết nối') || lower.includes('đăng nhập') || lower.includes('máy chủ') || lower.includes('quy trình') || lower.includes('proxy') || lower.includes('🚀') || lower.includes('chờ kết nối lại') || lower.includes('📡') || lower.includes('duy trì')) {
       return { tag: 'KẾT NỐI', className: 'log-tag-network' };
     }
     return { tag: 'BOT', className: 'log-tag-bot' };
@@ -68,16 +74,10 @@ window.TerminalConsole = function TerminalConsole({
     if (bracketMatch) {
       username = bracketMatch[1];
       cleanText = bracketMatch[2];
-    } else {
-      const prefixMatch = cleanText.match(/^([a-zA-Z0-9_.-]{3,20})(?=[\[💬🌾🎣💎🎁⏹🔄🚀✅❌⚠️\s])\s*(.*)$/);
-      if (prefixMatch && (!username || prefixMatch[1] === username || !/[A-Z]{4,}/.test(prefixMatch[1]))) {
-        username = prefixMatch[1];
-        cleanText = prefixMatch[2];
-      }
     }
 
     if (cleanText.startsWith('QUY TRÌNH->')) {
-      cleanText = cleanText.replace(/^QUY TRÌNH->\s*/, '[QUY TRÌNH] ');
+      cleanText = cleanText.replace(/^QUY TRÌNH->\s*/, '');
     }
 
     const tagBadge = getTagBadge(cleanText || rawText, log.type);
@@ -87,7 +87,7 @@ window.TerminalConsole = function TerminalConsole({
 
   const renderLogMessage = (rawText = '') => {
     if (!rawText) return '';
-    const emojiRegex = /(🎁|🌾|👶|✅|💬|🔄|⏹️|⏹|🚀|❌|⚠️|🎣|💎|🪨)/g;
+    const emojiRegex = /(🎁|🌾|👶|✅|💬|🔄|⏳|⏹️|⏹|🚀|❌|⚠️|🎣|💎|🪨|📡|🗺️)/g;
     const parts = rawText.split(emojiRegex);
     if (parts.length <= 1) return rawText;
 
@@ -100,6 +100,7 @@ window.TerminalConsole = function TerminalConsole({
           if (part === '✅') return <window.Icon key={i} name="checkCircle" size={13} color="var(--apple-green)" className="log-inline-icon" />;
           if (part === '💬') return <window.Icon key={i} name="message" size={13} color="var(--apple-gold)" className="log-inline-icon" />;
           if (part === '🔄') return <window.Icon key={i} name="refresh" size={13} color="var(--apple-orange)" className="log-inline-icon" />;
+          if (part === '⏳') return <window.Icon key={i} name="clock" size={13} color="var(--apple-orange)" className="log-inline-icon" />;
           if (part === '⏹️' || part === '⏹') return <window.Icon key={i} name="stop" size={13} color="var(--apple-red)" className="log-inline-icon" />;
           if (part === '🚀') return <window.Icon key={i} name="zap" size={13} color="var(--apple-blue)" className="log-inline-icon" />;
           if (part === '❌') return <window.Icon key={i} name="xCircle" size={13} color="var(--apple-red)" className="log-inline-icon" />;
@@ -107,6 +108,8 @@ window.TerminalConsole = function TerminalConsole({
           if (part === '🎣') return <window.Icon key={i} name="fish" size={13} color="var(--apple-teal)" className="log-inline-icon" />;
           if (part === '💎') return <window.Icon key={i} name="diamond" size={13} color="var(--apple-purple)" className="log-inline-icon" />;
           if (part === '🪨') return <window.Icon key={i} name="rock" size={13} color="var(--apple-orange)" className="log-inline-icon" />;
+          if (part === '📡') return <window.Icon key={i} name="network" size={13} color="var(--apple-blue)" className="log-inline-icon" />;
+          if (part === '🗺️') return <window.Icon key={i} name="map" size={13} color="var(--apple-blue)" className="log-inline-icon" />;
           return part;
         })}
       </span>

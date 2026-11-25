@@ -36,7 +36,10 @@ window.AccountLogsModal = function AccountLogsModal({ account, onClose, isAdmin 
     if (/AVATAR HEADLESS AUTO-LOGIN/i.test(text)) return true;
     if (/TÀI KHOẢN \(WEB\):|SERVER\s*\(WEB\):|MẬT KHẨU \(WEB\):/i.test(text)) return true;
     if (/\[PROXY SETUP\]|\[GIẢ LẬP ANGELCHIP\]|PROXY\s*\(NET\):/i.test(text)) return true;
+    if (/\[PROXY ALERT\]|\[PROXY RECOVERY\]/i.test(text)) return true;
+    if (/\[QUY TRÌNH\]/i.test(text)) return true;
     if (/\[CÀI ĐẶT AUTO/i.test(text)) return true;
+    if (/\(PID:\s*\d+\)/i.test(text) || /tiến trình bot/i.test(text) || /Đang dừng tiến trình/i.test(text)) return true;
     if (/DEBUG/i.test(text)) return true;
     return false;
   };
@@ -76,10 +79,10 @@ window.AccountLogsModal = function AccountLogsModal({ account, onClose, isAdmin 
         try {
           const newLog = JSON.parse(e.data);
           if (!newLog) return;
-          const matchesAccount = 
+          const matchesAccount =
             (newLog.accountId && String(newLog.accountId) === String(account.id)) ||
             (account.username && (newLog.username === account.username || newLog.text?.includes(`[${account.username}]`)));
-          
+
           if (matchesAccount) {
             setLogs(prev => {
               const last = prev[prev.length - 1];
@@ -89,7 +92,7 @@ window.AccountLogsModal = function AccountLogsModal({ account, onClose, isAdmin 
               return [...prev.slice(-999), newLog];
             });
           }
-        } catch (err) {}
+        } catch (err) { }
       });
 
       es.addEventListener('bot-event-status', (e) => {
@@ -98,7 +101,7 @@ window.AccountLogsModal = function AccountLogsModal({ account, onClose, isAdmin 
           if (data && String(data.accountId) === String(account.id) && data.eventState) {
             setEventState(data.eventState);
           }
-        } catch (err) {}
+        } catch (err) { }
       });
     } catch (err) {
       console.warn('SSE EventSource failed to connect:', err);
@@ -221,6 +224,9 @@ window.AccountLogsModal = function AccountLogsModal({ account, onClose, isAdmin 
       return { tag: 'GIẢ LẬP', className: 'account-logs-tag-bot', textClass: 'account-logs-text-default' };
     }
     const lower = text.toLowerCase();
+    if (lower.includes('đăng nhập thành công') || lower.includes('vào game thành công') || lower.includes('đang treo online')) {
+      return { tag: 'ONLINE', className: 'account-logs-tag-success', textClass: 'account-logs-text-farm' };
+    }
     if (lower.includes('sự kiện') || lower.includes('[sự kiện') || lower.includes('🎁') || lower.includes('[event') || lower.includes('vật phẩm')) {
       return { tag: 'SỰ KIỆN', className: 'account-logs-tag-event', textClass: 'account-logs-text-event', isEvent: true };
     }
@@ -233,13 +239,16 @@ window.AccountLogsModal = function AccountLogsModal({ account, onClose, isAdmin 
     if (lower.includes('em bé') || lower.includes('chăm em bé') || lower.includes('chăm baby') || lower.includes('👶')) {
       return { tag: 'BABY', className: 'account-logs-tag-ore', textClass: 'account-logs-text-ore' };
     }
+    if (lower.includes('chuyển map') || lower.includes('giữ kết nối') || lower.includes('🗺️') || lower.includes('📡') || lower.includes('duy trì kết nối')) {
+      return { tag: 'KẾT NỐI', className: 'account-logs-tag-network', textClass: 'account-logs-text-network' };
+    }
     if (lower.includes('auto farm') || lower.includes('chăm farm') || lower.includes('chăm sóc') || lower.includes('thu hoạch') || lower.includes('gieo hạt') || lower.includes('nông trại') || lower.includes('🌾')) {
       return { tag: 'FARM', className: 'account-logs-tag-farm', textClass: 'account-logs-text-farm' };
     }
     if (lower.includes('lỗi') || lower.includes('mất kết nối') || lower.includes('thất bại') || lower.includes('bị chặn') || lower.includes('❌') || lower.includes('⚠️')) {
       return { tag: 'LỖI', className: 'account-logs-tag-error', textClass: 'account-logs-text-error' };
     }
-    if (lower.includes('kết nối') || lower.includes('đăng nhập') || lower.includes('máy chủ') || lower.includes('hoàn mỹ') || lower.includes('diệu kỳ') || lower.includes('mạng') || lower.includes('quy trình') || lower.includes('🚀')) {
+    if (lower.includes('kết nối') || lower.includes('đăng nhập') || lower.includes('máy chủ') || lower.includes('hoàn mỹ') || lower.includes('diệu kỳ') || lower.includes('mạng') || lower.includes('quy trình') || lower.includes('🚀') || lower.includes('chờ kết nối lại')) {
       return { tag: 'KẾT NỐI', className: 'account-logs-tag-network', textClass: 'account-logs-text-network' };
     }
     return { tag: 'BOT', className: 'account-logs-tag-bot', textClass: 'account-logs-text-default' };
@@ -254,16 +263,10 @@ window.AccountLogsModal = function AccountLogsModal({ account, onClose, isAdmin 
     if (bracketMatch) {
       username = bracketMatch[1];
       cleanText = bracketMatch[2];
-    } else {
-      const prefixMatch = cleanText.match(/^([a-zA-Z0-9_.-]{3,20})(?=[\[💬🌾🎣💎🎁⏹🔄🚀✅❌⚠️\s])\s*(.*)$/);
-      if (prefixMatch && (!username || prefixMatch[1] === username || !/[A-Z]{4,}/.test(prefixMatch[1]))) {
-        username = prefixMatch[1];
-        cleanText = prefixMatch[2];
-      }
     }
 
     if (cleanText.startsWith('QUY TRÌNH->')) {
-      cleanText = cleanText.replace(/^QUY TRÌNH->\s*/, '[QUY TRÌNH] ');
+      cleanText = cleanText.replace(/^QUY TRÌNH->\s*/, '');
     }
 
     const tagInfo = getTagInfo(cleanText || rawText);
@@ -273,7 +276,7 @@ window.AccountLogsModal = function AccountLogsModal({ account, onClose, isAdmin 
 
   const renderLogText = (rawText = '') => {
     if (!rawText) return '';
-    const emojiRegex = /(🎁|🌾|👶|✅|💬|🔄|⏹️|⏹|🚀|❌|⚠️|🎣|💎|🪨)/g;
+    const emojiRegex = /(🎁|🌾|👶|✅|💬|🔄|⏳|⏹️|⏹|🚀|❌|⚠️|🎣|💎|🪨|📡|🗺️)/g;
     const parts = rawText.split(emojiRegex);
     if (parts.length <= 1) return rawText;
 
@@ -286,6 +289,7 @@ window.AccountLogsModal = function AccountLogsModal({ account, onClose, isAdmin 
           if (part === '✅') return <window.Icon key={i} name="checkCircle" size={13} color="var(--apple-green)" className="account-logs-inline-gift" />;
           if (part === '💬') return <window.Icon key={i} name="message" size={13} color="var(--apple-gold)" className="account-logs-inline-gift" />;
           if (part === '🔄') return <window.Icon key={i} name="refresh" size={13} color="var(--apple-orange)" className="account-logs-inline-gift" />;
+          if (part === '⏳') return <window.Icon key={i} name="clock" size={13} color="var(--apple-orange)" className="account-logs-inline-gift" />;
           if (part === '⏹️' || part === '⏹') return <window.Icon key={i} name="stop" size={13} color="var(--apple-red)" className="account-logs-inline-gift" />;
           if (part === '🚀') return <window.Icon key={i} name="zap" size={13} color="var(--apple-blue)" className="account-logs-inline-gift" />;
           if (part === '❌') return <window.Icon key={i} name="xCircle" size={13} color="var(--apple-red)" className="account-logs-inline-gift" />;
@@ -293,6 +297,8 @@ window.AccountLogsModal = function AccountLogsModal({ account, onClose, isAdmin 
           if (part === '🎣') return <window.Icon key={i} name="fish" size={13} color="var(--apple-teal)" className="account-logs-inline-gift" />;
           if (part === '💎') return <window.Icon key={i} name="diamond" size={13} color="var(--apple-purple)" className="account-logs-inline-gift" />;
           if (part === '🪨') return <window.Icon key={i} name="rock" size={13} color="var(--apple-orange)" className="account-logs-inline-gift" />;
+          if (part === '📡') return <window.Icon key={i} name="network" size={13} color="var(--apple-blue)" className="account-logs-inline-gift" />;
+          if (part === '🗺️') return <window.Icon key={i} name="map" size={13} color="var(--apple-blue)" className="account-logs-inline-gift" />;
           return part;
         })}
       </span>

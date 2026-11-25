@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const EventEmitter = require('events');
+const { formatLogTimestamp } = require('../../shared/utils/formatters');
 
 /**
  * CrossProcessBus (Infrastructure / IPC Layer)
@@ -166,7 +167,7 @@ class CrossProcessBus extends EventEmitter {
   publishLog(logEntry) {
     this.ensureDir();
     const formatted = {
-      timestamp: logEntry.timestamp || new Date().toLocaleTimeString('vi-VN', { hour12: false }),
+      timestamp: logEntry.timestamp || formatLogTimestamp(),
       type: logEntry.type || 'stdout',
       accountId: logEntry.accountId || null,
       username: logEntry.username || null,

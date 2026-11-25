@@ -14,28 +14,48 @@ public class AvatarHeadlessLauncher {
     private static volatile long lastLoginAttemptTime = 0;
     private static volatile String activeJarPath = "";
 
+    public static void waitBeforeReconnect(long millis) {
+        long deadline = System.currentTimeMillis() + millis;
+        while (System.currentTimeMillis() < deadline) {
+            try {
+                Thread.sleep(500);
+            } catch (InterruptedException ignored) {
+                break;
+            }
+        }
+    }
+
     public static boolean checkAndRestoreGameJar(String jarPath) {
-        if (jarPath == null || jarPath.trim().isEmpty()) jarPath = activeJarPath;
-        if (jarPath == null || jarPath.trim().isEmpty()) jarPath = "avatar_upxu_build34.jar";
+        if (jarPath == null || jarPath.trim().isEmpty())
+            jarPath = activeJarPath;
+        if (jarPath == null || jarPath.trim().isEmpty())
+            jarPath = "avatar_upxu_build34.jar";
 
         try {
             java.io.File targetFile = new java.io.File(jarPath);
             if (targetFile.exists() && targetFile.length() > 200000L) {
-                System.out.println("✅ [KIỂM TRA FILE JAR]: File game [" + targetFile.getName() + "] tồn tại nguyên vẹn (" + (targetFile.length() / 1024) + " KB).");
+                System.out.println("✅ [KIỂM TRA FILE JAR]: File game [" + targetFile.getName()
+                        + "] tồn tại nguyên vẹn (" + (targetFile.length() / 1024) + " KB).");
                 return true;
             }
 
-            System.err.println("⚠️ [CẢNH BÁO MẤT/LỖI FILE]: File game [" + jarPath + "] không tồn tại hoặc bị hỏng. Đang tự động nạp lại từ bản gốc...");
-            java.io.File parentDir = targetFile.getParentFile() != null ? targetFile.getParentFile() : new java.io.File(".");
+            System.err.println("⚠️ [CẢNH BÁO MẤT/LỖI FILE]: File game [" + jarPath
+                    + "] không tồn tại hoặc bị hỏng. Đang tự động nạp lại từ bản gốc...");
+            java.io.File parentDir = targetFile.getParentFile() != null ? targetFile.getParentFile()
+                    : new java.io.File(".");
             String[] fallbackJars = new String[] { "avatar_upxu_build34.jar", "avatar_fish_build40.jar" };
 
             for (String fb : fallbackJars) {
                 java.io.File fbFile = new java.io.File(parentDir, fb);
-                if (!fbFile.exists()) fbFile = new java.io.File(fb);
+                if (!fbFile.exists())
+                    fbFile = new java.io.File(fb);
 
-                if (fbFile.exists() && fbFile.length() > 200000L && !fbFile.getAbsolutePath().equalsIgnoreCase(targetFile.getAbsolutePath())) {
-                    java.nio.file.Files.copy(fbFile.toPath(), targetFile.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-                    System.out.println("✅ [NẠP LẠI THÀNH CÔNG]: Đã tự động khôi phục và nạp lại file [" + targetFile.getName() + "] từ [" + fbFile.getName() + "]!");
+                if (fbFile.exists() && fbFile.length() > 200000L
+                        && !fbFile.getAbsolutePath().equalsIgnoreCase(targetFile.getAbsolutePath())) {
+                    java.nio.file.Files.copy(fbFile.toPath(), targetFile.toPath(),
+                            java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                    System.out.println("✅ [NẠP LẠI THÀNH CÔNG]: Đã tự động khôi phục và nạp lại file ["
+                            + targetFile.getName() + "] từ [" + fbFile.getName() + "]!");
                     return true;
                 }
             }
@@ -64,19 +84,22 @@ public class AvatarHeadlessLauncher {
             final String avatarUser = System.getProperty("avatar.proxyUser");
             final String avatarPass = System.getProperty("avatar.proxyPass");
 
-            final String finalUser = (avatarUser != null && !avatarUser.isEmpty()) ? avatarUser : 
-                                    ((socksUser != null && !socksUser.isEmpty()) ? socksUser : httpUser);
-            final String finalPass = (avatarPass != null && !avatarPass.isEmpty()) ? avatarPass : 
-                                    ((socksPass != null && !socksPass.isEmpty()) ? socksPass : httpPass);
+            final String finalUser = (avatarUser != null && !avatarUser.isEmpty()) ? avatarUser
+                    : ((socksUser != null && !socksUser.isEmpty()) ? socksUser : httpUser);
+            final String finalPass = (avatarPass != null && !avatarPass.isEmpty()) ? avatarPass
+                    : ((socksPass != null && !socksPass.isEmpty()) ? socksPass : httpPass);
 
-            String proxyHost = (avatarHost != null && !avatarHost.isEmpty()) ? avatarHost :
-                               ((socksHost != null && !socksHost.isEmpty()) ? socksHost : httpHost);
-            String proxyPort = (avatarPort != null && !avatarPort.isEmpty()) ? avatarPort :
-                               ((socksPort != null && !socksPort.isEmpty()) ? socksPort : httpPort);
+            String proxyHost = (avatarHost != null && !avatarHost.isEmpty()) ? avatarHost
+                    : ((socksHost != null && !socksHost.isEmpty()) ? socksHost : httpHost);
+            String proxyPort = (avatarPort != null && !avatarPort.isEmpty()) ? avatarPort
+                    : ((socksPort != null && !socksPort.isEmpty()) ? socksPort : httpPort);
 
             if (proxyHost != null && !proxyHost.isEmpty()) {
                 int pPort = 1080;
-                try { pPort = Integer.parseInt(proxyPort); } catch (Exception ignored) {}
+                try {
+                    pPort = Integer.parseInt(proxyPort);
+                } catch (Exception ignored) {
+                }
                 String typeStr = (avatarType != null && !avatarType.isEmpty()) ? avatarType.toUpperCase() : "SOCKS";
                 String nonProxyHosts = "angelchip.net|*.angelchip.net";
 
@@ -87,9 +110,11 @@ public class AvatarHeadlessLauncher {
                 System.setProperty("socksProxyHost", proxyHost);
                 System.setProperty("socksProxyPort", String.valueOf(pPort));
 
-                // 2. Ghi trực tiếp cấu hình vào Config của bản giả lập MicroEmulator (angelchip_config2.xml)
+                // 2. Ghi trực tiếp cấu hình vào Config của bản giả lập MicroEmulator
+                // (angelchip_config2.xml)
                 try {
-                    org.microemu.app.Config.setProxy(true, proxyHost, pPort, finalUser != null ? finalUser : "", finalPass != null ? finalPass : "", nonProxyHosts);
+                    org.microemu.app.Config.setProxy(true, proxyHost, pPort, finalUser != null ? finalUser : "",
+                            finalPass != null ? finalPass : "", nonProxyHosts);
                 } catch (Throwable t) {
                 }
 
@@ -102,7 +127,8 @@ public class AvatarHeadlessLauncher {
                     try {
                         Class<?> akCls = Class.forName("ak");
                         java.lang.reflect.Constructor<?> ctor = akCls.getConstructor(String[].class);
-                        String[] proxyArr = new String[] { proxyHost, String.valueOf(pPort), finalUser, finalPass != null ? finalPass : "", nonProxyHosts, "true" };
+                        String[] proxyArr = new String[] { proxyHost, String.valueOf(pPort), finalUser,
+                                finalPass != null ? finalPass : "", nonProxyHosts, "true" };
                         java.net.Authenticator.setDefault((java.net.Authenticator) ctor.newInstance((Object) proxyArr));
                         akSuccess = true;
                     } catch (Throwable t) {
@@ -113,7 +139,8 @@ public class AvatarHeadlessLauncher {
                         java.net.Authenticator.setDefault(new java.net.Authenticator() {
                             @Override
                             protected java.net.PasswordAuthentication getPasswordAuthentication() {
-                                return new java.net.PasswordAuthentication(finalUser, (finalPass != null ? finalPass : "").toCharArray());
+                                return new java.net.PasswordAuthentication(finalUser,
+                                        (finalPass != null ? finalPass : "").toCharArray());
                             }
                         });
                     }
@@ -132,9 +159,11 @@ public class AvatarHeadlessLauncher {
     }
 
     private static String formatGoalMessage(AvatarModAdapter.PlayerStats s) {
-        if (s == null) return "Đã hoàn thành mục tiêu up theo cài đặt!";
+        if (s == null)
+            return "Đã hoàn thành mục tiêu up theo cài đặt!";
         if ("days".equals(s.targetReachedReason)) {
-            return "Đã hết thời hạn ngày up (" + s.upDays + " ngày)! (Đã cày: " + s.earnedCoins + (s.targetCoins > 0 ? (" / " + s.targetCoins) : "") + " xu)";
+            return "Đã hết thời hạn ngày up (" + s.upDays + " ngày)! (Đã cày: " + s.earnedCoins
+                    + (s.targetCoins > 0 ? (" / " + s.targetCoins) : "") + " xu)";
         }
         if (s.targetCoins > 0 && s.earnedCoins >= s.targetCoins) {
             return "Đã đạt mục tiêu up xu (" + s.earnedCoins + " / " + s.targetCoins + " xu)!";
@@ -152,7 +181,8 @@ public class AvatarHeadlessLauncher {
 
     /**
      * Âm thầm đồng bộ mốc ban đầu của Nông Trại khi nick đang online và không farm.
-     * Cập nhật tiến độ lên Web UI qua [EVENT_STATUS], tuyệt đối không in log chat nhận quà giả mạo!
+     * Cập nhật tiến độ lên Web UI qua [EVENT_STATUS], tuyệt đối không in log chat
+     * nhận quà giả mạo!
      */
     private static synchronized void syncFarmBaselineSilently() {
         try {
@@ -161,15 +191,19 @@ public class AvatarHeadlessLauncher {
                 if (lastReportedFarmTotal < 0) {
                     lastReportedFarmTotal = st.current;
                     lastReportedFarmMaxTotal = st.max > 0 ? st.max : 120;
-                    System.out.println("[EVENT_STATUS]: {\"item\":\"farm\",\"drop\":0,\"current\":" + st.current + ",\"max\":" + lastReportedFarmMaxTotal + ",\"source\":\"farm\"}");
+                    System.out.println("[EVENT_STATUS]: {\"item\":\"farm\",\"drop\":0,\"current\":" + st.current
+                            + ",\"max\":" + lastReportedFarmMaxTotal + ",\"source\":\"farm\"}");
                 }
             }
-        } catch (Throwable ignored) {}
+        } catch (Throwable ignored) {
+        }
     }
 
     /**
-     * Xuất tổng kết số lượng quà Nông Trại nhận được DUY NHẤT 1 LẦN sau khi hoàn thành lượt chăm Farm!
-     * Định dạng chuẩn gọn gàng: "🎁 [SỰ KIỆN FARM]: Đã nhận vật phẩm sự kiện (Hôm nay: sl/max)"
+     * Xuất tổng kết số lượng quà Nông Trại nhận được DUY NHẤT 1 LẦN sau khi hoàn
+     * thành lượt chăm Farm!
+     * Định dạng chuẩn gọn gàng: "🎁 [SỰ KIỆN FARM]: Đã nhận vật phẩm sự kiện (Hôm
+     * nay: sl/max)"
      */
     private static synchronized void checkAndLogFarmHarvest() {
         try {
@@ -187,7 +221,8 @@ public class AvatarHeadlessLauncher {
                 maxCount = candidateFarmMax > 0 ? candidateFarmMax : 120;
             }
 
-            if (curCount <= 0) return;
+            if (curCount <= 0)
+                return;
 
             int prev = lastReportedFarmTotal;
             boolean isNewDay = false;
@@ -212,19 +247,24 @@ public class AvatarHeadlessLauncher {
             }
 
             if (shouldLog) {
-                String progressStr = (maxCount > 0) ? (" (Hôm nay: " + curCount + "/" + maxCount + ")") : (" (Tổng: " + curCount + ")");
+                String progressStr = (maxCount > 0) ? (" (Hôm nay: " + curCount + "/" + maxCount + ")")
+                        : (" (Tổng: " + curCount + ")");
                 System.out.println("🎁 [SỰ KIỆN FARM]: Đã nhận vật phẩm sự kiện" + progressStr);
                 int dropVal = (prev > 0 && curCount > prev) ? (curCount - prev) : curCount;
-                System.out.println("[EVENT_STATUS]: {\"item\":\"farm\",\"drop\":" + dropVal + ",\"current\":" + curCount + ",\"max\":" + maxCount + ",\"source\":\"farm\"" + (isNewDay ? ",\"isNewDay\":true" : "") + "}");
+                System.out.println("[EVENT_STATUS]: {\"item\":\"farm\",\"drop\":" + dropVal + ",\"current\":" + curCount
+                        + ",\"max\":" + maxCount + ",\"source\":\"farm\"" + (isNewDay ? ",\"isNewDay\":true" : "")
+                        + "}");
             }
-        } catch (Throwable ignored) {}
+        } catch (Throwable ignored) {
+        }
     }
 
     public static void main(String[] args) {
         try {
             System.setOut(new java.io.PrintStream(System.out, true, "UTF-8"));
             System.setErr(new java.io.PrintStream(System.err, true, "UTF-8"));
-        } catch (Exception ignored) {}
+        } catch (Exception ignored) {
+        }
 
         // Thiết lập Authenticator cho Proxy trước khi khởi động bất kỳ kết nối mạng nào
         setupProxyAuthenticator();
@@ -235,8 +275,6 @@ public class AvatarHeadlessLauncher {
 
         // Tự động kiểm tra file game ngay khi khởi động
         checkAndRestoreGameJar(activeJarPath);
-
-
 
         String rawUser = System.getProperty("avatar.user");
         if (rawUser == null || rawUser.isEmpty()) {
@@ -250,7 +288,8 @@ public class AvatarHeadlessLauncher {
         }
         final String customPass = rawPass;
         String customServer = System.getProperty("avatar.server");
-        String[] defaultServers = new String[] { "Hoàn Mỹ", "Diệu Kỳ", "Huyền Diệu", "Thần Tiên", "Mộng Mơ", "Song Tử", "Bạch Dương" };
+        String[] defaultServers = new String[] { "Hoàn Mỹ", "Diệu Kỳ", "Huyền Diệu", "Thần Tiên", "Mộng Mơ", "Song Tử",
+                "Bạch Dương" };
         String resolvedServerName = System.getProperty("avatar.serverName");
 
         int serverId = 0;
@@ -261,21 +300,36 @@ public class AvatarHeadlessLauncher {
                 if (sId >= 0 && sId < defaultServers.length) {
                     resolvedServerName = defaultServers[sId];
                 }
-            } catch (Exception ignored) {}
+            } catch (Exception ignored) {
+            }
         }
 
         final int finalServerId = serverId;
-        final String finalServerName = (resolvedServerName != null && !resolvedServerName.isEmpty()) ? resolvedServerName : "Hoàn Mỹ";
+        final String finalServerName = (resolvedServerName != null && !resolvedServerName.isEmpty())
+                ? resolvedServerName
+                : "Hoàn Mỹ";
 
         final String initialAutoStartType = System.getProperty("avatar.autoStartType");
-        final String[] persistentAutoHolder = new String[] { (initialAutoStartType != null && !initialAutoStartType.isEmpty()) ? initialAutoStartType : null };
+        final String[] persistentAutoHolder = new String[] {
+                (initialAutoStartType != null && !initialAutoStartType.isEmpty()) ? initialAutoStartType : null };
+        final boolean[] isCurrentlyOnlineHolder = new boolean[] { false };
 
-        // 1. Thread nhận lệnh điều khiển thời gian thực từ Node.js (SETUP, RESET_DATA, START_AUTO, STOP_AUTO, ...)
+        if (persistentAutoHolder[0] != null) {
+            String friendly = AvatarModAdapter.getAutoFriendlyName(persistentAutoHolder[0]);
+            System.out.println(
+                    "⏳ [CHỜ VÀO GAME]: Đã ghi nhớ [" + friendly + "], bot sẽ tự động kích hoạt ngay khi vào game!");
+            System.out.println("[AUTO_STATUS]: {\"isRunning\":true,\"status\":\"pending\",\"autoType\":\""
+                    + persistentAutoHolder[0] + "\",\"message\":\"Đang chờ vào game để chạy " + friendly + "...\"}");
+        }
+
+        // 1. Thread nhận lệnh điều khiển thời gian thực từ Node.js (SETUP, RESET_DATA,
+        // START_AUTO, STOP_AUTO, ...)
         Thread stdinThread = new Thread(new Runnable() {
             @Override
             public void run() {
                 try {
-                    java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.InputStreamReader(System.in, "UTF-8"));
+                    java.io.BufferedReader reader = new java.io.BufferedReader(
+                            new java.io.InputStreamReader(System.in, "UTF-8"));
                     String cmdLine;
                     while ((cmdLine = reader.readLine()) != null) {
                         cmdLine = cmdLine.trim();
@@ -303,11 +357,22 @@ public class AvatarHeadlessLauncher {
                             if (autoType != null && !autoType.trim().isEmpty()) {
                                 persistentAutoHolder[0] = autoType.trim();
                             }
-                            AvatarModAdapter.startAuto(autoType);
+                            if (isCurrentlyOnlineHolder[0]) {
+                                AvatarModAdapter.startAuto(autoType);
+                            } else {
+                                String friendly = AvatarModAdapter.getAutoFriendlyName(autoType);
+                                System.out.println("⏳ [CHỜ VÀO GAME]: Đã ghi nhớ [" + friendly
+                                        + "], bot sẽ tự động kích hoạt ngay khi vào game!");
+                                System.out.println(
+                                        "[AUTO_STATUS]: {\"isRunning\":true,\"status\":\"pending\",\"autoType\":\""
+                                                + autoType + "\",\"message\":\"Đang chờ vào game để chạy " + friendly
+                                                + "...\"}");
+                            }
                         } else if (cmdLine.startsWith("STOP_AUTO")) {
                             String[] parts = cmdLine.split("\\s+");
                             String targetType = parts.length > 1 ? parts[1] : null;
-                            if (targetType == null || targetType.equalsIgnoreCase(persistentAutoHolder[0])) {
+                            if (targetType == null || "all".equalsIgnoreCase(targetType)
+                                    || targetType.equalsIgnoreCase(persistentAutoHolder[0])) {
                                 persistentAutoHolder[0] = null;
                             }
                             AvatarModAdapter.stopAuto(targetType);
@@ -315,7 +380,8 @@ public class AvatarHeadlessLauncher {
                             AvatarModAdapter.resetUpThueData();
                         }
                     }
-                } catch (Throwable ignored) {}
+                } catch (Throwable ignored) {
+                }
             }
         });
         stdinThread.setDaemon(true);
@@ -329,13 +395,15 @@ public class AvatarHeadlessLauncher {
                     System.out.println("[QUY TRÌNH] 1. Đang khởi động giả lập Avatar (chờ 8 giây)...");
                     Thread.sleep(8000);
 
-                    // Nạp cấu hình Farm, Diamond, Fish, SellOre vào game & RMS ngay khi giả lập tải xong
+                    // Nạp cấu hình Farm, Diamond, Fish, SellOre vào game & RMS ngay khi giả lập tải
+                    // xong
                     String initFarmB64 = System.getProperty("avatar.farmSettingsB64");
                     if (initFarmB64 != null && !initFarmB64.isEmpty()) {
                         try {
                             byte[] decoded = java.util.Base64.getDecoder().decode(initFarmB64);
                             AvatarModAdapter.applyFarmSetup(new String(decoded, "UTF-8"));
-                        } catch (Throwable ignored) {}
+                        } catch (Throwable ignored) {
+                        }
                     }
 
                     String initDiamondB64 = System.getProperty("avatar.diamondSettingsB64");
@@ -343,7 +411,8 @@ public class AvatarHeadlessLauncher {
                         try {
                             byte[] decoded = java.util.Base64.getDecoder().decode(initDiamondB64);
                             AvatarModAdapter.applyDiamondSetup(new String(decoded, "UTF-8"));
-                        } catch (Throwable ignored) {}
+                        } catch (Throwable ignored) {
+                        }
                     }
 
                     String initFishB64 = System.getProperty("avatar.fishSettingsB64");
@@ -351,7 +420,8 @@ public class AvatarHeadlessLauncher {
                         try {
                             byte[] decoded = java.util.Base64.getDecoder().decode(initFishB64);
                             AvatarModAdapter.applyFishSetup(new String(decoded, "UTF-8"));
-                        } catch (Throwable ignored) {}
+                        } catch (Throwable ignored) {
+                        }
                     }
 
                     String initSellOreB64 = System.getProperty("avatar.sellOreSettingsB64");
@@ -359,7 +429,8 @@ public class AvatarHeadlessLauncher {
                         try {
                             byte[] decoded = java.util.Base64.getDecoder().decode(initSellOreB64);
                             AvatarModAdapter.applySellOreSetup(new String(decoded, "UTF-8"));
-                        } catch (Throwable ignored) {}
+                        } catch (Throwable ignored) {
+                        }
                     }
 
                     System.out.println("[QUY TRÌNH] 2. Bắt đầu kết nối & đăng nhập tài khoản...");
@@ -368,9 +439,11 @@ public class AvatarHeadlessLauncher {
 
                     boolean initialSetupApplied = false;
                     boolean isCurrentlyOnline = false;
+                    long playerNullSince = 0;
                     AvatarModAdapter.AutoTaskInfo lastAutoTask = null;
 
-                    // Bộ theo dõi sự kiện game thông minh chống trùng lặp (Deduplicated Event Tracker tách riêng Farm & Fish)
+                    // Bộ theo dõi sự kiện game thông minh chống trùng lặp (Deduplicated Event
+                    // Tracker tách riêng Farm & Fish)
                     String lastReportedPopupText = null;
                     String lastHandledEventPopupText = null;
 
@@ -378,13 +451,15 @@ public class AvatarHeadlessLauncher {
                     final java.util.Map<String, Integer> lastReportedFishCounts = new java.util.LinkedHashMap<String, Integer>();
                     final java.util.Map<String, Integer> lastReportedFishMax = new java.util.LinkedHashMap<String, Integer>();
 
-                    // Tải mốc ban đầu từ RAM khi vừa đăng nhập (để Web UI biết tiến độ, TUYỆT ĐỐI KHÔNG in log chat nhận quà)
+                    // Tải mốc ban đầu từ RAM khi vừa đăng nhập (để Web UI biết tiến độ, TUYỆT ĐỐI
+                    // KHÔNG in log chat nhận quà)
                     syncFarmBaselineSilently();
 
                     boolean wasFarming = false;
 
                     // Vòng lặp giám sát liên tục 24/7
                     while (true) {
+                        isCurrentlyOnlineHolder[0] = isCurrentlyOnline;
                         // Thăm dò Dialog nhanh & Snapshot sự kiện mỗi 250ms trong 10 chu kỳ = 2.5s
                         for (int subTick = 0; subTick < 10; subTick++) {
                             Thread.sleep(250);
@@ -394,7 +469,8 @@ public class AvatarHeadlessLauncher {
                             boolean isCurrentlyFishing = curTask != null && "fish".equalsIgnoreCase(curTask.autoType);
                             boolean isCurrentlyFarming = curTask != null && "farm".equalsIgnoreCase(curTask.autoType);
 
-                            // Khi bot vừa kết thúc lượt Auto Farm -> xuất tổng kết 1 LẦN DUY NHẤT toàn bộ quà nhận được
+                            // Khi bot vừa kết thúc lượt Auto Farm -> xuất tổng kết 1 LẦN DUY NHẤT toàn bộ
+                            // quà nhận được
                             if (wasFarming && !isCurrentlyFarming) {
                                 checkAndLogFarmHarvest();
                             }
@@ -402,7 +478,8 @@ public class AvatarHeadlessLauncher {
 
                             // 1. ĐỌC TRỰC TIẾP TỪ BỘ NHỚ RAM MOD (SkGift)
                             // 1.1. Dành cho Câu Cá: SkGift quét mảng NPC (gN/gName/gX/gY)
-                            java.util.List<AvatarModAdapter.ModEventGiftItem> skSnapshot = AvatarModAdapter.getModEventGiftSnapshot();
+                            java.util.List<AvatarModAdapter.ModEventGiftItem> skSnapshot = AvatarModAdapter
+                                    .getModEventGiftSnapshot();
                             boolean hasModGiftEngine = (skSnapshot != null);
 
                             if (hasModGiftEngine && isCurrentlyFishing) {
@@ -417,49 +494,57 @@ public class AvatarHeadlessLauncher {
                                             lastReportedFishCounts.put(it.itemName, it.currentCount);
                                             lastReportedFishMax.put(it.itemName, it.maxCount);
 
-                                            String pStr = (it.maxCount > 0) ? (" (Hôm nay: " + it.currentCount + "/" + it.maxCount + ")") : (" (Tổng: " + it.currentCount + ")");
-                                            System.out.println("🎁 [SỰ KIỆN FISH]: Nhận +" + added + " " + it.itemName + pStr);
-                                            System.out.println("[EVENT_STATUS]: {\"item\":\"" + AvatarModAdapter.escapeJson(it.itemName) + "\",\"drop\":" + added + ",\"current\":" + it.currentCount + ",\"max\":" + it.maxCount + ",\"source\":\"fish\"}");
+                                            String pStr = (it.maxCount > 0)
+                                                    ? (" (Hôm nay: " + it.currentCount + "/" + it.maxCount + ")")
+                                                    : (" (Tổng: " + it.currentCount + ")");
+                                            System.out.println(
+                                                    "🎁 [SỰ KIỆN FISH]: Nhận +" + added + " " + it.itemName + pStr);
+                                            System.out.println("[EVENT_STATUS]: {\"item\":\""
+                                                    + AvatarModAdapter.escapeJson(it.itemName) + "\",\"drop\":" + added
+                                                    + ",\"current\":" + it.currentCount + ",\"max\":" + it.maxCount
+                                                    + ",\"source\":\"fish\"}");
                                         }
                                     }
                                 }
                             }
 
-                            // 1.2. Dành cho Nông Trại: Nếu không đang farm, âm thầm đồng bộ mốc ban đầu (Baseline) khi có vật phẩm trong RAM
+                            // 1.2. Dành cho Nông Trại: Nếu không đang farm, âm thầm đồng bộ mốc ban đầu
+                            // (Baseline) khi có vật phẩm trong RAM
                             if (!isCurrentlyFarming) {
                                 syncFarmBaselineSilently();
                             }
 
-                            // 2. Xử lý Dialog Game, Chữ bay màn hình & Tab Chat Admin:
-                            // - Tự động đóng popup sự kiện ngay lập tức để game hoạt động trơn tru
-                            // - Fallback nhận diện quà Câu Cá nếu bản mod không có SkGift
+                            // 2. Xử lý Dialog Game (Chỉ Type 2: Modal Dialogs thực sự mới được log làm
+                            // [POPUP GAME]):
                             String currentDialog = AvatarModAdapter.checkActiveGameDialog();
-                            String candidateDialog = (currentDialog != null && !currentDialog.trim().isEmpty())
-                                    ? currentDialog
-                                    : AvatarModAdapter.checkLatestGameDialog();
+                            String candidateDialog = currentDialog;
 
-                            // Quét qua hàng đợi chữ bay trên màn hình (bx.if) nếu mod chuyển popup thành chữ bay
-                            if (candidateDialog == null || candidateDialog.trim().isEmpty()) {
-                                candidateDialog = AvatarModAdapter.checkFlyingBannerMessage();
+                            // Type 3: Chữ bay chạy ngang đầu màn hình (bx.if) hoặc Tab Chat Admin CHỈ dùng
+                            // để quét quà sự kiện,
+                            // TUYỆT ĐỐI KHÔNG gán vào candidateDialog để tránh in nhầm thành [POPUP GAME]:
+                            String eventCandidate = candidateDialog;
+                            if (eventCandidate == null || eventCandidate.trim().isEmpty()) {
+                                eventCandidate = AvatarModAdapter.checkFlyingBannerMessage();
+                            }
+                            if (eventCandidate == null || eventCandidate.trim().isEmpty()) {
+                                eventCandidate = AvatarModAdapter.checkAdminChatMessage();
                             }
 
-                            // Nếu không có popup dialog (như khi bật Auto Farm), kiểm tra tin nhắn sự kiện từ Tab Chat Admin / Server
-                            if (candidateDialog == null || candidateDialog.trim().isEmpty()) {
-                                candidateDialog = AvatarModAdapter.checkAdminChatMessage();
-                            }
-
-                            if (candidateDialog != null && !candidateDialog.trim().isEmpty()) {
-                                AvatarModAdapter.EventProgressInfo ev = AvatarModAdapter.parseEventText(candidateDialog);
+                            if (eventCandidate != null && !eventCandidate.trim().isEmpty()) {
+                                AvatarModAdapter.EventProgressInfo ev = AvatarModAdapter.parseEventText(eventCandidate);
                                 if (ev != null) {
-                                    // Tự động đóng popup sự kiện ngay lập tức để game hoạt động trơn tru
-                                    AvatarModAdapter.dismissCurrentDialog();
+                                    // Tự động đóng popup sự kiện nếu đang có dialog mở
+                                    if (currentDialog != null) {
+                                        AvatarModAdapter.dismissCurrentDialog();
+                                    }
 
-                                    // Chống đếm lặp cùng 1 popup khi dialog singleton giữ chuỗi trong RAM
-                                    if (!candidateDialog.equals(lastHandledEventPopupText)) {
-                                        lastHandledEventPopupText = candidateDialog;
+                                    // Chống đếm lặp cùng 1 popup khi dialog/banner giữ chuỗi trong RAM
+                                    if (!eventCandidate.equals(lastHandledEventPopupText)) {
+                                        lastHandledEventPopupText = eventCandidate;
 
                                         // Bỏ hoàn toàn khối 2 của fish. Quà fish chỉ đọc từ SkGift ở Khối 1!
-                                        if (isCurrentlyFarming || (ev.source != null && ev.source.toLowerCase().contains("farm"))) {
+                                        if (isCurrentlyFarming
+                                                || (ev.source != null && ev.source.toLowerCase().contains("farm"))) {
                                             if (ev.currentCount > 0) {
                                                 candidateFarmCurrent = ev.currentCount;
                                             }
@@ -468,13 +553,23 @@ public class AvatarHeadlessLauncher {
                                             }
                                         }
                                     }
-                                } else if (!candidateDialog.equals(lastReportedPopupText)) {
+                                }
+                            }
+
+                            // Chỉ in log [POPUP GAME] đối với modal dialog thực tế (Type 2):
+                            if (candidateDialog != null && !candidateDialog.trim().isEmpty()) {
+                                AvatarModAdapter.EventProgressInfo ev = AvatarModAdapter
+                                        .parseEventText(candidateDialog);
+                                if (ev == null && !candidateDialog.equals(lastReportedPopupText)) {
                                     String lowerDlg = candidateDialog.toLowerCase();
                                     // Bỏ qua các popup loading/chờ nội bộ không cần spam log
-                                    if (!lowerDlg.contains("đang lấy dữ liệu") && !lowerDlg.contains("xin chờ") && !lowerDlg.contains("chờ xíu")) {
+                                    if (!lowerDlg.contains("đang lấy dữ liệu") && !lowerDlg.contains("xin chờ")
+                                            && !lowerDlg.contains("chờ xíu")
+                                            && !(lowerDlg.contains("đang đăng nhập") && !lowerDlg.contains("tài khoản đang đăng nhập"))) {
                                         lastReportedPopupText = candidateDialog;
                                         System.out.println("💬 [POPUP GAME]: " + candidateDialog);
-                                        if (isCurrentlyFarming && (lowerDlg.contains("chăm sóc xong") || lowerDlg.contains("đã chăm sóc"))) {
+                                        if (isCurrentlyFarming && (lowerDlg.contains("chăm sóc xong")
+                                                || lowerDlg.contains("đã chăm sóc"))) {
                                             checkAndLogFarmHarvest();
                                         }
                                     }
@@ -487,20 +582,28 @@ public class AvatarHeadlessLauncher {
                             continue;
                         }
 
-                        // 2.0. Kiểm tra hoàn thành mục tiêu trực tiếp từ số liệu Mod trong RAM (CHỈ KHI ĐANG ONLINE TRONG GAME)
+                        // 2.0. Kiểm tra hoàn thành mục tiêu trực tiếp từ số liệu Mod trong RAM (CHỈ KHI
+                        // ĐANG ONLINE TRONG GAME)
                         if (isCurrentlyOnline && AvatarModAdapter.isTargetReached()) {
                             isCurrentlyOnline = false;
                             AvatarModAdapter.PlayerStats s = AvatarModAdapter.extractPlayerStats();
                             String prefix = getGoalPrefix(s);
                             String goalMsg = formatGoalMessage(s);
-                            System.out.println(prefix + ": " + goalMsg + (s != null ? (" (Số dư: " + s.coins + " xu)") : ""));
-                            System.out.println("[ACCOUNT_STATUS]: {\"state\":\"target_reached\",\"message\":\"" + goalMsg + "\",\"isTargetReached\":true,\"isCompleted\":true}");
+                            System.out.println(
+                                    prefix + ": " + goalMsg + (s != null ? (" (Số dư: " + s.coins + " xu)") : ""));
+                            System.out.println("[ACCOUNT_STATUS]: {\"state\":\"target_reached\",\"message\":\""
+                                    + goalMsg + "\",\"isTargetReached\":true,\"isCompleted\":true}");
                             AvatarModAdapter.dismissCurrentDialog();
                             AvatarModAdapter.stopModAuto();
                             Thread.sleep(2000);
                             System.exit(0);
                             return;
                         }
+
+                        // 2.0.5. Đọc trạng thái Socket & Nhân vật thực tế trong Game trước khi xử lý Popup
+                        // (Tránh để popup cũ lúc kết nối gây hiểu nhầm khi nhân vật đã thực sự vào game)
+                        boolean connectedNow = AvatarModAdapter.isNetworkConnected();
+                        boolean inWorldNow = AvatarModAdapter.isPlayerInWorld();
 
                         // 2.1. Kiểm tra thông báo từ Server / Mod (Popup Dialog)
                         String currentDialog = AvatarModAdapter.checkActiveGameDialog();
@@ -509,14 +612,17 @@ public class AvatarHeadlessLauncher {
                             String lower = currentDialog.toLowerCase();
 
                             // 0. Kiểm tra hoàn thành mục tiêu Up Xu / Hết hạn ngày Up từ Popup Mod
-                            if (lower.contains("đạt yêu cầu") || lower.contains("up xup theo") || lower.contains("up xu theo") || lower.contains("hoàn thành mục tiêu")) {
+                            if (lower.contains("đạt yêu cầu") || lower.contains("up xup theo")
+                                    || lower.contains("up xu theo") || lower.contains("hoàn thành mục tiêu")) {
                                 isCurrentlyOnline = false;
+                                isCurrentlyOnlineHolder[0] = false;
                                 AvatarModAdapter.PlayerStats s = AvatarModAdapter.extractPlayerStats();
                                 String goalMsg = (s != null && s.targetCoins > 0)
                                         ? ("Đã đạt mục tiêu up xu (" + s.earnedCoins + " / " + s.targetCoins + " xu)!")
                                         : currentDialog;
                                 System.out.println("🏆 [HOÀN THÀNH MỤC TIÊU TỪ MOD]: " + goalMsg);
-                                System.out.println("[ACCOUNT_STATUS]: {\"state\":\"target_reached\",\"message\":\"" + goalMsg + "\",\"isTargetReached\":true,\"isCompleted\":true}");
+                                System.out.println("[ACCOUNT_STATUS]: {\"state\":\"target_reached\",\"message\":\""
+                                        + goalMsg + "\",\"isTargetReached\":true,\"isCompleted\":true}");
                                 AvatarModAdapter.dismissCurrentDialog();
                                 AvatarModAdapter.stopModAuto();
                                 Thread.sleep(2000);
@@ -525,35 +631,57 @@ public class AvatarHeadlessLauncher {
                             }
 
                             // 1. Kiểm tra lỗi xác thực tài khoản (Sai pass, tài khoản không đúng)
-                            if (lower.contains("sai") || lower.contains("mật khẩu") || lower.contains("không đúng") || 
-                                lower.contains("không tồn tại") || lower.contains("không chính xác")) {
+                            if (lower.contains("sai") || lower.contains("mật khẩu") || lower.contains("không đúng") ||
+                                    lower.contains("không tồn tại") || lower.contains("không chính xác")) {
                                 isCurrentlyOnline = false;
+                                isCurrentlyOnlineHolder[0] = false;
                                 System.err.println("❌ [LỖI XÁC THỰC TỪ SERVER]: " + currentDialog);
-                                System.out.println("[ACCOUNT_STATUS]: {\"state\":\"auth_error\",\"message\":\"" + currentDialog + "\",\"isError\":true}");
+                                System.out.println("[ACCOUNT_STATUS]: {\"state\":\"auth_error\",\"message\":\""
+                                        + currentDialog + "\",\"isError\":true}");
                                 hasPermanentError = true;
-                                continue;
+                                AvatarModAdapter.dismissCurrentDialog();
+                                try {
+                                    Thread.sleep(1500);
+                                } catch (Throwable ignored) {
+                                }
+                                System.exit(2);
+                                return;
                             }
 
                             // 2. Tài khoản bị khóa
                             if (lower.contains("khóa") || lower.contains("khoá")) {
                                 isCurrentlyOnline = false;
+                                isCurrentlyOnlineHolder[0] = false;
                                 System.err.println("❌ [TÀI KHOẢN BỊ KHÓA]: " + currentDialog);
-                                System.out.println("[ACCOUNT_STATUS]: {\"state\":\"account_locked\",\"message\":\"" + currentDialog + "\",\"isError\":true}");
+                                System.out.println("[ACCOUNT_STATUS]: {\"state\":\"account_locked\",\"message\":\""
+                                        + currentDialog + "\",\"isError\":true}");
                                 hasPermanentError = true;
-                                continue;
+                                AvatarModAdapter.dismissCurrentDialog();
+                                try {
+                                    Thread.sleep(1500);
+                                } catch (Throwable ignored) {
+                                }
+                                System.exit(2);
+                                return;
                             }
 
                             // 2.5. Phát hiện hộp thoại xác nhận "Bạn có muốn thoát? (Có, Không)"
                             if (lower.contains("muốn thoát") || lower.contains("bạn có muốn thoát")) {
-                                System.out.println("💬 [TỪ CHỐI THOÁT GAME]: Hộp thoại xác nhận \"" + currentDialog + "\" -> Đã tự động đóng/chọn Không để tiếp tục treo game!");
+                                System.out.println("💬 [TỪ CHỐI THOÁT GAME]: Hộp thoại xác nhận \"" + currentDialog
+                                        + "\" -> Đã tự động đóng/chọn Không để tiếp tục treo game!");
                                 AvatarModAdapter.dismissCurrentDialog();
                                 continue;
                             }
 
-                            // 3. Popup lỗi có nút Thoát lúc khởi động -> Bấm Thoát, kiểm tra xem file có mất/hỏng không
-                            // CHỈ bắt khi thực sự có nút Thoát trong ngoặc đơn (Thoát) hoặc (Exit), và không phải câu hỏi "muốn thoát"
-                            if (!isCurrentlyOnline && !lower.contains("muốn thoát") && (currentDialog.contains("(Thoát)") || currentDialog.contains("(Exit)") || lower.contains("ứng dụng sai")) && !lower.contains("đối thủ") && !lower.contains("bỏ cuộc") && !lower.contains("để sau")) {
-                                System.err.println("⚠️ [PHÁT HIỆN POPUP CÓ NÚT THOÁT]: \"" + currentDialog + "\" -> Bấm Thoát & Kiểm tra file game...");
+                            // 3. Popup lỗi có nút Thoát lúc khởi động -> Bấm Thoát, kiểm tra xem file có
+                            // mất/hỏng không
+                            if (!isCurrentlyOnline && !inWorldNow && !lower.contains("muốn thoát")
+                                    && (currentDialog.contains("(Thoát)") || currentDialog.contains("(Exit)")
+                                            || lower.contains("ứng dụng sai"))
+                                    && !lower.contains("đối thủ") && !lower.contains("bỏ cuộc")
+                                    && !lower.contains("để sau")) {
+                                System.err.println("⚠️ [PHÁT HIỆN POPUP CÓ NÚT THOÁT]: \"" + currentDialog
+                                        + "\" -> Bấm Thoát & Kiểm tra file game...");
                                 AvatarModAdapter.dismissCurrentDialog();
                                 checkAndRestoreGameJar(activeJarPath);
                                 Thread.sleep(1500);
@@ -561,80 +689,159 @@ public class AvatarHeadlessLauncher {
                                 return;
                             }
 
-                            // 4. Các thông báo nạp game bình thường (đang lấy dữ liệu nông trại, đang tải, xin chờ...) -> Bỏ qua, chờ game nạp xong
-                            if (lower.contains("đang lấy dữ liệu") || lower.contains("đang kết nối") || lower.contains("đang tải") || lower.contains("xin chờ")) {
+                            // 4. Các thông báo nạp game bình thường -> Bỏ qua, chờ game nạp xong
+                            if (lower.contains("đang lấy dữ liệu") || lower.contains("đang kết nối")
+                                    || lower.contains("đang tải") || lower.contains("xin chờ")
+                                    || (lower.contains("đang đăng nhập") && !lower.contains("tài khoản đang đăng nhập"))) {
                                 // Cho game nạp tự nhiên, không ngắt vòng lặp
-                            } else if (isCurrentlyOnline) {
-                                // 5. NẾU ĐANG ONLINE TRONG GAME: Chỉ ngắt kết nối khi Popup là Mất kết nối / Nơi khác đăng nhập
-                                if (lower.contains("mất kết nối") || lower.contains("kết nối thất bại") || 
-                                    lower.contains("nơi khác") || lower.contains("khác đăng nhập") || 
-                                    lower.contains("đang online") || lower.contains("máy khác") || 
-                                    lower.contains("người đăng nhập") || lower.contains("phiên làm việc") ||
-                                    lower.contains("quá nhanh") || lower.contains("bảo trì")) {
+                            } else if (isCurrentlyOnline || (connectedNow && inWorldNow)) {
+                                // 5. NẾU ĐANG ONLINE TRONG GAME (hoặc socket sống & nhân vật đã vào map):
+                                // Chỉ ngắt kết nối khi thực sự có popup kick từ server (Nơi khác đăng nhập, Mất kết nối khi socket không còn)
+                                if (lower.contains("nơi khác") || lower.contains("khác đăng nhập")
+                                        || lower.contains("máy khác") || lower.contains("người đăng nhập")
+                                        || lower.contains("phiên làm việc") || lower.contains("bảo trì")
+                                        || ((!connectedNow || !inWorldNow) && (lower.contains("mất kết nối")
+                                                || lower.contains("kết nối thất bại") || lower.contains("quá nhanh")
+                                                || lower.contains("đang online")))) {
                                     isCurrentlyOnline = false;
-                                    System.out.println("[ACCOUNT_STATUS]: {\"state\":\"disconnected\",\"message\":\"" + currentDialog + " (Thử lại sau 20s)...\"}");
-                                    AvatarModAdapter.dismissCurrentDialog();
-                                    Thread.sleep(20000);
+                                    isCurrentlyOnlineHolder[0] = false;
+                                    playerNullSince = 0;
+                                    lastReportedPopupText = null;
+                                    AvatarModAdapter.resetKeepAliveState();
+                                    System.out.println("[ACCOUNT_STATUS]: {\"state\":\"disconnected\",\"message\":\""
+                                            + currentDialog + " (Thử lại sau 20s)...\"}");
+                                    AvatarModAdapter.dismissCurrentDialogOnly();
+                                    System.out.println(
+                                            "⏳ [CHỜ KẾT NỐI LẠI]: Đang tạm dừng 20 giây trước khi tự động đăng nhập lại...");
+                                    waitBeforeReconnect(20000);
                                     lastLoginAttemptTime = System.currentTimeMillis();
-                                    System.out.println("🔄 [TỰ ĐỘNG ĐĂNG NHẬP LẠI]: Đang kết nối lại máy chủ...");
+                                    System.out.println(
+                                            "🔄 [TỰ ĐỘNG ĐĂNG NHẬP LẠI]: Hết thời gian chờ, bắt đầu kết nối lại máy chủ...");
                                     AvatarModAdapter.login(customUser, customPass, finalServerId, finalServerName);
                                     continue;
                                 }
-                                // Popup thông thường trong game (nông trại, đối thoại NPC...) -> Tự đóng để tiếp tục
-                                AvatarModAdapter.dismissCurrentDialog();
+                                // Popup thông thường hoặc popup cũ còn sót khi đã vào map thành công -> Tự đóng để tiếp tục
+                                AvatarModAdapter.dismissCurrentDialogOnly();
                             } else {
-                                // 6. NẾU ĐANG NGOÀI MÀN HÌNH ĐĂNG NHẬP (!isCurrentlyOnline):
-                                // Toàn bộ các popup (Nơi khác, Quá nhanh, Mất kết nối, Bảo trì...) -> Đóng popup, chờ 20s rồi tự động đăng nhập lại
-                                isCurrentlyOnline = false;
-                                System.out.println("[ACCOUNT_STATUS]: {\"state\":\"disconnected\",\"message\":\"" + currentDialog + " (Thử lại sau 20s)...\"}");
-                                AvatarModAdapter.dismissCurrentDialog();
-                                Thread.sleep(20000);
-                                lastLoginAttemptTime = System.currentTimeMillis();
-                                System.out.println("🔄 [TỰ ĐỘNG ĐĂNG NHẬP LẠI]: Đang kết nối lại máy chủ...");
-                                AvatarModAdapter.login(customUser, customPass, finalServerId, finalServerName);
-                                continue;
+                                // 6. NẾU ĐANG NGOÀI MÀN HÌNH ĐĂNG NHẬP (!isCurrentlyOnline && !inWorldNow):
+                                if (lower.contains("chào mừng") || lower.contains("thông báo")
+                                        || lower.contains("phiên bản") || lower.contains("hướng dẫn")
+                                        || lower.contains("cập nhật")) {
+                                    System.out.println(
+                                            "💬 [THÔNG BÁO KHỞI ĐỘNG]: Tự đóng popup thông tin: " + currentDialog);
+                                    AvatarModAdapter.dismissCurrentDialog();
+                                    continue;
+                                }
+                                // Nếu "Tài khoản đang đăng nhập" xuất hiện trong 15s đầu lúc đang bắt tay, cho phép chờ thêm chút
+                                if ((lower.contains("tài khoản đang đăng nhập") || lower.contains("đang online"))
+                                        && (System.currentTimeMillis() - lastLoginAttemptTime < 15000L)) {
+                                    AvatarModAdapter.dismissCurrentDialogOnly();
+                                } else {
+                                    isCurrentlyOnline = false;
+                                    isCurrentlyOnlineHolder[0] = false;
+                                    playerNullSince = 0;
+                                    lastReportedPopupText = null;
+                                    AvatarModAdapter.resetKeepAliveState();
+                                    System.out.println("[ACCOUNT_STATUS]: {\"state\":\"disconnected\",\"message\":\""
+                                            + currentDialog + " (Thử lại sau 20s)...\"}");
+                                    AvatarModAdapter.dismissCurrentDialogOnly();
+                                    System.out.println(
+                                            "⏳ [CHỜ KẾT NỐI LẠI]: Đang tạm dừng 20 giây trước khi tự động đăng nhập lại...");
+                                    waitBeforeReconnect(20000);
+                                    lastLoginAttemptTime = System.currentTimeMillis();
+                                    System.out.println(
+                                            "🔄 [TỰ ĐỘNG ĐĂNG NHẬP LẠI]: Hết thời gian chờ, bắt đầu kết nối lại máy chủ...");
+                                    AvatarModAdapter.login(customUser, customPass, finalServerId, finalServerName);
+                                    continue;
+                                }
                             }
                         }
 
-                        // 2.2. Kiểm tra trạng thái người chơi & kết nối mạng socket
-                        MIDlet activeMidlet = MIDletBridge.getCurrentMIDlet();
-                        Object ef = AvatarModAdapter.getActivePlayerInstance(activeMidlet != null ? activeMidlet.getClass().getClassLoader() : null);
+                        // 2.2. Kiểm tra trạng thái người chơi thực tế trong map & kết nối mạng socket
                         boolean connected = AvatarModAdapter.isNetworkConnected();
+                        boolean inWorld = AvatarModAdapter.isPlayerInWorld();
                         long now = System.currentTimeMillis();
 
                         // 2.2.0. Phát hiện nhân vật bị ĐĂNG XUẤT hoặc ĐÓNG SOCKET MẤT KẾT NỐI
-                        if (isCurrentlyOnline && (ef == null || !connected)) {
-                            isCurrentlyOnline = false;
-                            System.out.println("⚠️ [ĐÓNG SOCKET / MẤT KẾT NỐI]: Socket đã đóng hoặc mất kết nối máy chủ!");
-                            System.out.println("[ACCOUNT_STATUS]: {\"state\":\"disconnected\",\"message\":\"Mất kết nối / Đóng socket, đang đăng nhập lại sau 20s...\"}");
-                            AvatarModAdapter.dismissCurrentDialog();
-                            Thread.sleep(20000);
-                            lastLoginAttemptTime = System.currentTimeMillis();
-                            System.out.println("🔄 [TỰ ĐỘNG ĐĂNG NHẬP LẠI]: Đang kết nối lại máy chủ...");
-                            AvatarModAdapter.login(customUser, customPass, finalServerId, finalServerName);
-                            continue;
+                        if (isCurrentlyOnline) {
+                            if (!connected) {
+                                // Socket thực sự đã đóng
+                                isCurrentlyOnline = false;
+                                isCurrentlyOnlineHolder[0] = false;
+                                playerNullSince = 0;
+                                lastReportedPopupText = null;
+                                AvatarModAdapter.resetKeepAliveState();
+                                System.out.println(
+                                        "⚠️ [ĐÓNG SOCKET / MẤT KẾT NỐI]: Socket đã đóng hoặc mất kết nối máy chủ!");
+                                System.out.println(
+                                        "[ACCOUNT_STATUS]: {\"state\":\"disconnected\",\"message\":\"Mất kết nối / Đóng socket, đang đăng nhập lại sau 20s...\"}");
+                                AvatarModAdapter.dismissCurrentDialogOnly();
+                                System.out.println(
+                                        "⏳ [CHỜ KẾT NỐI LẠI]: Đang tạm dừng 20 giây trước khi tự động đăng nhập lại...");
+                                waitBeforeReconnect(20000);
+                                lastLoginAttemptTime = System.currentTimeMillis();
+                                System.out.println(
+                                        "🔄 [TỰ ĐỘNG ĐĂNG NHẬP LẠI]: Hết thời gian chờ, bắt đầu kết nối lại máy chủ...");
+                                AvatarModAdapter.login(customUser, customPass, finalServerId, finalServerName);
+                                continue;
+                            } else if (!inWorld) {
+                                // Socket vẫn mở nhưng nhân vật chưa ở trong map (có thể đang chuyển map/khu)
+                                // Cho phép grace period 5 giây để game nạp map xong trước khi coi là bị đăng xuất
+                                if (playerNullSince == 0) {
+                                    playerNullSince = now;
+                                } else if (now - playerNullSince > 5000L) {
+                                    isCurrentlyOnline = false;
+                                    isCurrentlyOnlineHolder[0] = false;
+                                    playerNullSince = 0;
+                                    lastReportedPopupText = null;
+                                    AvatarModAdapter.resetKeepAliveState();
+                                    System.out.println(
+                                            "⚠️ [ĐĂNG XUẤT KHỎI NHÂN VẬT]: Nhân vật đã rời khỏi game quá 5s!");
+                                    System.out.println(
+                                            "[ACCOUNT_STATUS]: {\"state\":\"disconnected\",\"message\":\"Bị đăng xuất khỏi nhân vật, đang đăng nhập lại sau 20s...\"}");
+                                    AvatarModAdapter.dismissCurrentDialogOnly();
+                                    System.out.println(
+                                            "⏳ [CHỜ KẾT NỐI LẠI]: Đang tạm dừng 20 giây trước khi tự động đăng nhập lại...");
+                                    waitBeforeReconnect(20000);
+                                    lastLoginAttemptTime = System.currentTimeMillis();
+                                    System.out.println(
+                                            "🔄 [TỰ ĐỘNG ĐĂNG NHẬP LẠI]: Hết thời gian chờ, bắt đầu kết nối lại máy chủ...");
+                                    AvatarModAdapter.login(customUser, customPass, finalServerId, finalServerName);
+                                    continue;
+                                }
+                            } else {
+                                playerNullSince = 0;
+                            }
                         }
 
                         // 2.2.1. Đang ở ngoài màn hình game (chưa online):
-                        // - Nếu socket đã đóng (!connected): Chờ đủ 20 giây rồi tự động kết nối lại
-                        // - Nếu socket đang kết nối (đang tải dữ liệu map/item): Cho phép chờ tối đa 35 giây để game nạp xong, không ngắt giữa chừng
-                        boolean isSocketDead = !connected && (now - lastLoginAttemptTime > 20000L);
-                        boolean isStuckLoading = connected && (ef == null) && (now - lastLoginAttemptTime > 35000L);
+                        // - Nếu socket đã đóng (!connected): Chờ tối đa 25 giây (bao gồm 20s timeout của game) rồi kết nối lại
+                        // - Nếu socket đang kết nối nhưng chưa vào map (!inWorld): Cho phép chờ tối đa 35 giây để game nạp xong
+                        boolean isSocketDead = !connected && (now - lastLoginAttemptTime > 25000L);
+                        boolean isStuckLoading = connected && !inWorld && (now - lastLoginAttemptTime > 35000L);
 
                         if (!isCurrentlyOnline && (isSocketDead || isStuckLoading)) {
                             isCurrentlyOnline = false;
+                            isCurrentlyOnlineHolder[0] = false;
+                            playerNullSince = 0;
+                            lastReportedPopupText = null;
+                            AvatarModAdapter.resetKeepAliveState();
                             System.out.println("⚠️ [CHƯA VÀO ĐƯỢC GAME]: Tự động kết nối lại sau 20 giây...");
-                            System.out.println("[ACCOUNT_STATUS]: {\"state\":\"disconnected\",\"message\":\"Đang kết nối lại máy chủ sau 20s...\"}");
-                            AvatarModAdapter.dismissCurrentDialog();
-                            Thread.sleep(20000);
+                            System.out.println(
+                                    "[ACCOUNT_STATUS]: {\"state\":\"disconnected\",\"message\":\"Đang kết nối lại máy chủ sau 20s...\"}");
+                            AvatarModAdapter.dismissCurrentDialogOnly();
+                            System.out.println(
+                                    "⏳ [CHỜ KẾT NỐI LẠI]: Đang tạm dừng 20 giây trước khi tự động đăng nhập lại...");
+                            waitBeforeReconnect(20000);
                             lastLoginAttemptTime = System.currentTimeMillis();
-                            System.out.println("🔄 [TỰ ĐỘNG ĐĂNG NHẬP LẠI]: Đang kết nối lại máy chủ...");
+                            System.out.println(
+                                    "🔄 [TỰ ĐỘNG ĐĂNG NHẬP LẠI]: Hết thời gian chờ, bắt đầu kết nối lại máy chủ...");
                             AvatarModAdapter.login(customUser, customPass, finalServerId, finalServerName);
                             continue;
                         }
 
                         // 2.3. Áp dụng cấu hình ban đầu sau khi đăng nhập thành công
-                        if (connected && ef != null) {
+                        if (connected && inWorld) {
                             if (!initialSetupApplied) {
                                 initialSetupApplied = true;
                                 String resetOnStart = System.getProperty("avatar.resetOnStart");
@@ -644,12 +851,21 @@ public class AvatarHeadlessLauncher {
 
                                 String initTarget = System.getProperty("avatar.targetCoins");
                                 String initDays = System.getProperty("avatar.upDays");
-                                if ((initTarget != null && !initTarget.isEmpty()) || (initDays != null && !initDays.isEmpty())) {
+                                if ((initTarget != null && !initTarget.isEmpty())
+                                        || (initDays != null && !initDays.isEmpty())) {
                                     int tCoins = 0;
                                     int uDays = 0;
-                                    try { if (initTarget != null) tCoins = Integer.parseInt(initTarget); } catch (Exception ignored) {}
-                                    try { if (initDays != null) uDays = Integer.parseInt(initDays); } catch (Exception ignored) {}
-                                    AvatarModAdapter.applyUpThueSetup(tCoins, uDays);
+                                    try {
+                                        if (initTarget != null)
+                                            tCoins = Integer.parseInt(initTarget);
+                                    } catch (Exception ignored) {
+                                    }
+                                    try {
+                                        if (initDays != null)
+                                            uDays = Integer.parseInt(initDays);
+                                    } catch (Exception ignored) {
+                                    }
+                                    AvatarModAdapter.applyUpThueSetup(tCoins, uDays, false);
                                 }
 
                                 initFarmB64 = System.getProperty("avatar.farmSettingsB64");
@@ -657,7 +873,8 @@ public class AvatarHeadlessLauncher {
                                     try {
                                         byte[] decoded = java.util.Base64.getDecoder().decode(initFarmB64);
                                         AvatarModAdapter.applyFarmSetup(new String(decoded, "UTF-8"));
-                                    } catch (Throwable ignored) {}
+                                    } catch (Throwable ignored) {
+                                    }
                                 }
 
                                 initDiamondB64 = System.getProperty("avatar.diamondSettingsB64");
@@ -665,72 +882,109 @@ public class AvatarHeadlessLauncher {
                                     try {
                                         byte[] decoded = java.util.Base64.getDecoder().decode(initDiamondB64);
                                         AvatarModAdapter.applyDiamondSetup(new String(decoded, "UTF-8"));
-                                    } catch (Throwable ignored) {}
+                                    } catch (Throwable ignored) {
+                                    }
                                 }
                             }
 
                             if (!isCurrentlyOnline) {
                                 isCurrentlyOnline = true;
-                                System.out.println("[ACCOUNT_STATUS]: {\"state\":\"online\",\"message\":\"Đang Treo Online\",\"isError\":false,\"isMaintenance\":false}");
+                                isCurrentlyOnlineHolder[0] = true;
+                                lastReportedPopupText = null;
+                                AvatarModAdapter.resetKeepAliveState();
+                                System.out.println("✅ [ĐĂNG NHẬP THÀNH CÔNG]: Tài khoản [" + customUser
+                                        + "] đã kết nối và vào game thành công!");
+                                System.out.println(
+                                        "[ACCOUNT_STATUS]: {\"state\":\"online\",\"message\":\"Đang Treo Online\",\"isError\":false,\"isMaintenance\":false}");
 
-                                // Tự động khôi phục Auto đã chạy trước đó sau khi đăng nhập / kết nối lại thành công (CHỈ KHI CHƯA HOÀN THÀNH MỤC TIÊU)
-                                // Tối ưu: Thực thi tuần tự trên supervisorThread thay vì tạo thêm native thread mới
+                                // Chờ nhân vật thực sự sẵn sàng trong RAM (tối đa 12 giây, kiểm tra mỗi 500ms)
+                                long waitStart = System.currentTimeMillis();
+                                while (System.currentTimeMillis() - waitStart < 12000L) {
+                                    if (AvatarModAdapter.isPlayerInWorld()) {
+                                        break;
+                                    }
+                                    Thread.sleep(500);
+                                }
+                                Thread.sleep(1500); // Chờ thêm 1.5 giây cho map và dữ liệu nạp ổn định
+
+                                // 1. Chuyển map nhanh sang Nông trại (Map ID 25) bằng chức năng của Game Mod
+                                AvatarModAdapter.fastSwitchMap(25);
+
+                                // 2. Kích hoạt cơ chế tự động Giữ kết nối có sẵn của Game Mod
+                                AvatarModAdapter.enableBuiltinKeepAlive();
+
+                                // 3. Tự động khôi phục Auto đã chạy trước đó sau khi đăng nhập / kết nối lại thành công (CHỈ KHI CHƯA HOÀN THÀNH MỤC TIÊU)
                                 if (persistentAutoHolder[0] != null && !persistentAutoHolder[0].trim().isEmpty() && !AvatarModAdapter.isTargetReached()) {
                                     final String toRestore = persistentAutoHolder[0];
                                     try {
-                                        Thread.sleep(3500); // Chờ 3.5 giây cho map và dữ liệu nhân vật nạp ổn định
+                                        Thread.sleep(2000); // Chờ chuyển map hoàn tất
                                         if (!AvatarModAdapter.isTargetReached() && persistentAutoHolder[0] != null) {
-                                            System.out.println("🔄 [TỰ ĐỘNG KHÔI PHỤC AUTO]: Đang kích hoạt lại " + toRestore + " sau khi kết nối lại thành công...");
                                             AvatarModAdapter.startAuto(toRestore);
-                                        } else {
-                                            persistentAutoHolder[0] = null;
                                         }
-                                    } catch (Throwable ignored) {}
+                                    } catch (Throwable ignored) {
+                                    }
                                 }
                             }
                         }
 
-                        // 2.4. Trích xuất thông tin tài khoản (Số xu, Số lượng, Xu cần up, Tim, Đếm ngược cày...)
+                        // 2.4. Trích xuất thông tin tài khoản (Số xu, Số lượng, Xu cần up, Tim, Đếm
+                        // ngược cày...)
                         AvatarModAdapter.PlayerStats stats = AvatarModAdapter.extractPlayerStats();
                         System.out.println("[PLAYER_STATS]: " + stats.toJson(lastLoginAttemptTime));
 
-                        // 2.4.1. Kiểm tra trực tiếp biến số liệu nội bộ của Mod xem đã hoàn tất mục tiêu chưa
+                        // 2.4.1. Kiểm tra trực tiếp biến số liệu nội bộ của Mod xem đã hoàn tất mục
+                        // tiêu chưa
                         if (stats.isTargetReached) {
                             isCurrentlyOnline = false;
                             String prefix = getGoalPrefix(stats);
                             String goalMsg = formatGoalMessage(stats);
-                            System.out.println(prefix + " [TỪ SỐ LIỆU MOD]: " + goalMsg + " (Số dư: " + stats.coins + " xu)");
-                            System.out.println("[ACCOUNT_STATUS]: {\"state\":\"target_reached\",\"message\":\"" + goalMsg + "\",\"isTargetReached\":true,\"isCompleted\":true}");
+                            System.out.println(
+                                    prefix + " [TỪ SỐ LIỆU MOD]: " + goalMsg + " (Số dư: " + stats.coins + " xu)");
+                            System.out.println("[ACCOUNT_STATUS]: {\"state\":\"target_reached\",\"message\":\""
+                                    + goalMsg + "\",\"isTargetReached\":true,\"isCompleted\":true}");
                             AvatarModAdapter.stopModAuto();
                             Thread.sleep(2000);
                             System.exit(0);
                             return;
                         }
 
-                        // 2.5. Giám sát trạng thái tiến trình Auto (Auto Farm, Auto Diamond, Auto Fish, Auto Bán Đá, Auto Baby, Auto Tài Xỉu...)
+                        // 2.5. Giám sát trạng thái tiến trình Auto (Auto Farm, Auto Diamond, Auto Fish,
+                        // Auto Bán Đá, Auto Baby, Auto Tài Xỉu...)
                         try {
                             AvatarModAdapter.AutoTaskInfo curAutoTask = AvatarModAdapter.getActiveAutoTask();
 
                             if (lastAutoTask != null && curAutoTask == null) {
-                                // 1. TẤT CẢ AUTO KHI HOÀN THÀNH / DỪNG TOÀN BỘ -> XÓA AUTO GHI NHỚ ĐỂ KHÔNG TỰ BẬT LẠI
+                                // 1. TẤT CẢ AUTO KHI HOÀN THÀNH / DỪNG TOÀN BỘ -> XÓA AUTO GHI NHỚ ĐỂ KHÔNG TỰ
+                                // BẬT LẠI
                                 if ("farm".equalsIgnoreCase(lastAutoTask.autoType)) {
                                     checkAndLogFarmHarvest();
                                 }
-                                persistentAutoHolder[0] = null;
-                                System.out.println("✅ [AUTO HOÀN THÀNH]: " + lastAutoTask.friendlyName + " đã hoàn tất toàn bộ công việc!");
-                                System.out.println("[AUTO_STATUS]: {\"isRunning\":false,\"status\":\"finished\",\"finished\":true,\"autoType\":\"" + lastAutoTask.autoType + "\",\"message\":\"Đã hoàn tất " + lastAutoTask.friendlyName + "!\"}");
+                                // Chỉ xóa auto ghi nhớ khi nhân vật THỰC SỰ đang online trong game (không xóa nếu bị rớt mạng/mất kết nối!)
+                                if (isCurrentlyOnline && connected && inWorld) {
+                                    persistentAutoHolder[0] = null;
+                                }
+                                System.out.println("✅ [AUTO HOÀN THÀNH]: " + lastAutoTask.friendlyName
+                                        + " đã hoàn tất toàn bộ công việc!");
+                                System.out.println(
+                                        "[AUTO_STATUS]: {\"isRunning\":false,\"status\":\"finished\",\"finished\":true,\"autoType\":\""
+                                                + lastAutoTask.autoType + "\",\"message\":\"Đã hoàn tất "
+                                                + lastAutoTask.friendlyName + "!\"}");
                             } else if (lastAutoTask == null && curAutoTask != null) {
                                 // 2. TẤT CẢ AUTO KHI BẮT ĐẦU CHẠY BAN ĐẦU
                                 String autoIcon = "⚡";
                                 String at = (curAutoTask.autoType != null) ? curAutoTask.autoType.toLowerCase() : "";
-                                String fn = (curAutoTask.friendlyName != null) ? curAutoTask.friendlyName.toLowerCase() : "";
+                                String fn = (curAutoTask.friendlyName != null) ? curAutoTask.friendlyName.toLowerCase()
+                                        : "";
                                 if (at.contains("farm") || fn.contains("farm") || fn.contains("nông")) {
                                     autoIcon = "🌾";
-                                } else if (at.contains("fish") || at.contains("cau_ca") || at.contains("cc") || fn.contains("cá") || fn.contains("câu")) {
+                                } else if (at.contains("fish") || at.contains("cau_ca") || at.contains("cc")
+                                        || fn.contains("cá") || fn.contains("câu")) {
                                     autoIcon = "🎣";
-                                } else if (at.contains("diamond") || at.contains("kc") || fn.contains("khoáng") || fn.contains("kim cương")) {
+                                } else if (at.contains("diamond") || at.contains("kc") || fn.contains("khoáng")
+                                        || fn.contains("kim cương")) {
                                     autoIcon = "💎";
-                                } else if (at.contains("sell_ore") || at.contains("banda") || at.contains("stone") || at.contains("bd") || fn.contains("bán đá") || fn.contains("đá")) {
+                                } else if (at.contains("sell_ore") || at.contains("banda") || at.contains("stone")
+                                        || at.contains("bd") || fn.contains("bán đá") || fn.contains("đá")) {
                                     autoIcon = "🪨";
                                 } else if (at.contains("baby") || fn.contains("em bé")) {
                                     autoIcon = "👶";
@@ -741,8 +995,17 @@ public class AvatarHeadlessLauncher {
                                 if ("farm".equalsIgnoreCase(curAutoTask.autoType)) {
                                     syncFarmBaselineSilently();
                                 }
-                                System.out.println("[AUTO_STATUS]: {\"isRunning\":true,\"status\":\"running\",\"autoType\":\"" + curAutoTask.autoType + "\",\"parentAutoType\":" + (curAutoTask.parentAutoType != null ? "\"" + curAutoTask.parentAutoType + "\"" : "null") + ",\"subTask\":" + curAutoTask.isSubTask + ",\"message\":\"Đang chạy " + curAutoTask.friendlyName + "...\"}");
-                            } else if (lastAutoTask != null && curAutoTask != null && (!lastAutoTask.className.equals(curAutoTask.className) || !lastAutoTask.autoType.equals(curAutoTask.autoType))) {
+                                System.out.println(
+                                        "[AUTO_STATUS]: {\"isRunning\":true,\"status\":\"running\",\"autoType\":\""
+                                                + curAutoTask.autoType + "\",\"parentAutoType\":"
+                                                + (curAutoTask.parentAutoType != null
+                                                        ? "\"" + curAutoTask.parentAutoType + "\""
+                                                        : "null")
+                                                + ",\"subTask\":" + curAutoTask.isSubTask + ",\"message\":\"Đang chạy "
+                                                + curAutoTask.friendlyName + "...\"}");
+                            } else if (lastAutoTask != null && curAutoTask != null
+                                    && (!lastAutoTask.className.equals(curAutoTask.className)
+                                            || !lastAutoTask.autoType.equals(curAutoTask.autoType))) {
                                 // 3. CHUYỂN ĐỔI GIỮA CÁC AUTO / SUB-TASK TRONG QUÁ TRÌNH CHẠY
                                 // Chỉ kiểm tra thu hoạch Farm nếu vừa kết thúc Auto Farm
                                 if ("farm".equalsIgnoreCase(lastAutoTask.autoType)) {
@@ -750,41 +1013,77 @@ public class AvatarHeadlessLauncher {
                                 }
                                 if ("farm".equalsIgnoreCase(curAutoTask.autoType)) {
                                     syncFarmBaselineSilently();
-                                    System.out.println("🌾 [TẠM VỀ FARM]: Đang tạm chuyển sang " + curAutoTask.friendlyName + " (từ " + lastAutoTask.friendlyName + ")...");
-                                    System.out.println("[AUTO_STATUS]: {\"isRunning\":true,\"status\":\"running\",\"autoType\":\"farm\",\"parentAutoType\":\"" + lastAutoTask.autoType + "\",\"subTask\":true,\"message\":\"Đang về chăm farm (từ " + lastAutoTask.friendlyName + ")...\"}");
-                                } else if ("sell_ore".equalsIgnoreCase(curAutoTask.autoType) || "banda".equalsIgnoreCase(curAutoTask.autoType)) {
-                                    System.out.println("🪨 [TẠM VỀ BÁN ĐÁ]: Rương đầy, đang tạm chuyển sang " + curAutoTask.friendlyName + " (từ " + lastAutoTask.friendlyName + ")...");
-                                    System.out.println("[AUTO_STATUS]: {\"isRunning\":true,\"status\":\"running\",\"autoType\":\"sell_ore\",\"parentAutoType\":\"" + lastAutoTask.autoType + "\",\"subTask\":true,\"message\":\"Đang bán đá (từ " + lastAutoTask.friendlyName + ")...\"}");
+                                    System.out.println("🌾 [TẠM VỀ FARM]: Đang tạm chuyển sang "
+                                            + curAutoTask.friendlyName + " (từ " + lastAutoTask.friendlyName + ")...");
+                                    System.out.println(
+                                            "[AUTO_STATUS]: {\"isRunning\":true,\"status\":\"running\",\"autoType\":\"farm\",\"parentAutoType\":\""
+                                                    + lastAutoTask.autoType
+                                                    + "\",\"subTask\":true,\"message\":\"Đang về chăm farm (từ "
+                                                    + lastAutoTask.friendlyName + ")...\"}");
+                                } else if ("sell_ore".equalsIgnoreCase(curAutoTask.autoType)
+                                        || "banda".equalsIgnoreCase(curAutoTask.autoType)) {
+                                    System.out.println("🪨 [TẠM VỀ BÁN ĐÁ]: Rương đầy, đang tạm chuyển sang "
+                                            + curAutoTask.friendlyName + " (từ " + lastAutoTask.friendlyName + ")...");
+                                    System.out.println(
+                                            "[AUTO_STATUS]: {\"isRunning\":true,\"status\":\"running\",\"autoType\":\"sell_ore\",\"parentAutoType\":\""
+                                                    + lastAutoTask.autoType
+                                                    + "\",\"subTask\":true,\"message\":\"Đang bán đá (từ "
+                                                    + lastAutoTask.friendlyName + ")...\"}");
                                 } else if ("baby".equalsIgnoreCase(curAutoTask.autoType)) {
-                                    System.out.println("👶 [TẠM VỀ CHĂM EM BÉ]: Đang tạm chuyển sang " + curAutoTask.friendlyName + " (từ " + lastAutoTask.friendlyName + ")...");
-                                    System.out.println("[AUTO_STATUS]: {\"isRunning\":true,\"status\":\"running\",\"autoType\":\"baby\",\"parentAutoType\":\"" + lastAutoTask.autoType + "\",\"subTask\":true,\"message\":\"Đang chăm em bé (từ " + lastAutoTask.friendlyName + ")...\"}");
+                                    System.out.println("👶 [TẠM VỀ CHĂM EM BÉ]: Đang tạm chuyển sang "
+                                            + curAutoTask.friendlyName + " (từ " + lastAutoTask.friendlyName + ")...");
+                                    System.out.println(
+                                            "[AUTO_STATUS]: {\"isRunning\":true,\"status\":\"running\",\"autoType\":\"baby\",\"parentAutoType\":\""
+                                                    + lastAutoTask.autoType
+                                                    + "\",\"subTask\":true,\"message\":\"Đang chăm em bé (từ "
+                                                    + lastAutoTask.friendlyName + ")...\"}");
                                 } else if ("diamond".equalsIgnoreCase(curAutoTask.autoType)) {
                                     if ("farm".equalsIgnoreCase(lastAutoTask.autoType)) {
-                                        System.out.println("💎 [HOÀN TẤT FARM]: Đã chăm sóc nông trại xong, tiếp tục " + curAutoTask.friendlyName + "!");
-                                    } else if ("sell_ore".equalsIgnoreCase(lastAutoTask.autoType) || "banda".equalsIgnoreCase(lastAutoTask.autoType)) {
-                                        System.out.println("💎 [HOÀN TẤT BÁN ĐÁ]: Đã bán đá xong, tiếp tục " + curAutoTask.friendlyName + "!");
+                                        System.out.println("💎 [HOÀN TẤT FARM]: Đã chăm sóc nông trại xong, tiếp tục "
+                                                + curAutoTask.friendlyName + "!");
+                                    } else if ("sell_ore".equalsIgnoreCase(lastAutoTask.autoType)
+                                            || "banda".equalsIgnoreCase(lastAutoTask.autoType)) {
+                                        System.out.println("💎 [HOÀN TẤT BÁN ĐÁ]: Đã bán đá xong, tiếp tục "
+                                                + curAutoTask.friendlyName + "!");
                                     } else if ("baby".equalsIgnoreCase(lastAutoTask.autoType)) {
-                                        System.out.println("💎 [HOÀN TẤT CHĂM EM BÉ]: Đã chăm em bé xong, tiếp tục " + curAutoTask.friendlyName + "!");
+                                        System.out.println("💎 [HOÀN TẤT CHĂM EM BÉ]: Đã chăm em bé xong, tiếp tục "
+                                                + curAutoTask.friendlyName + "!");
                                     } else {
-                                        System.out.println("💎 [TIẾP TỤC]: Chuyển sang " + curAutoTask.friendlyName + "!");
+                                        System.out.println(
+                                                "💎 [TIẾP TỤC]: Chuyển sang " + curAutoTask.friendlyName + "!");
                                     }
-                                    System.out.println("[AUTO_STATUS]: {\"isRunning\":true,\"status\":\"running\",\"autoType\":\"diamond\",\"parentAutoType\":null,\"subTask\":false,\"message\":\"Đang chạy " + curAutoTask.friendlyName + "...\"}");
+                                    System.out.println(
+                                            "[AUTO_STATUS]: {\"isRunning\":true,\"status\":\"running\",\"autoType\":\"diamond\",\"parentAutoType\":null,\"subTask\":false,\"message\":\"Đang chạy "
+                                                    + curAutoTask.friendlyName + "...\"}");
                                 } else if ("fish".equalsIgnoreCase(curAutoTask.autoType)) {
                                     if ("farm".equalsIgnoreCase(lastAutoTask.autoType)) {
-                                        System.out.println("🎣 [HOÀN TẤT FARM]: Đã chăm sóc nông trại xong, tiếp tục " + curAutoTask.friendlyName + "!");
-                                    } else if ("sell_ore".equalsIgnoreCase(lastAutoTask.autoType) || "banda".equalsIgnoreCase(lastAutoTask.autoType)) {
-                                        System.out.println("🎣 [HOÀN TẤT BÁN ĐÁ]: Đã bán đá xong, tiếp tục " + curAutoTask.friendlyName + "!");
+                                        System.out.println("🎣 [HOÀN TẤT FARM]: Đã chăm sóc nông trại xong, tiếp tục "
+                                                + curAutoTask.friendlyName + "!");
+                                    } else if ("sell_ore".equalsIgnoreCase(lastAutoTask.autoType)
+                                            || "banda".equalsIgnoreCase(lastAutoTask.autoType)) {
+                                        System.out.println("🎣 [HOÀN TẤT BÁN ĐÁ]: Đã bán đá xong, tiếp tục "
+                                                + curAutoTask.friendlyName + "!");
                                     } else {
-                                        System.out.println("🎣 [TIẾP TỤC]: Chuyển sang " + curAutoTask.friendlyName + "!");
+                                        System.out.println(
+                                                "🎣 [TIẾP TỤC]: Chuyển sang " + curAutoTask.friendlyName + "!");
                                     }
-                                    System.out.println("[AUTO_STATUS]: {\"isRunning\":true,\"status\":\"running\",\"autoType\":\"fish\",\"parentAutoType\":null,\"subTask\":false,\"message\":\"Đang chạy " + curAutoTask.friendlyName + "...\"}");
+                                    System.out.println(
+                                            "[AUTO_STATUS]: {\"isRunning\":true,\"status\":\"running\",\"autoType\":\"fish\",\"parentAutoType\":null,\"subTask\":false,\"message\":\"Đang chạy "
+                                                    + curAutoTask.friendlyName + "...\"}");
                                 } else {
-                                    System.out.println("⚡ [CHUYỂN AUTO]: " + lastAutoTask.friendlyName + " -> " + curAutoTask.friendlyName);
-                                    System.out.println("[AUTO_STATUS]: {\"isRunning\":true,\"status\":\"running\",\"autoType\":\"" + curAutoTask.autoType + "\",\"parentAutoType\":\"" + lastAutoTask.autoType + "\",\"subTask\":" + curAutoTask.isSubTask + ",\"message\":\"Đang chạy " + curAutoTask.friendlyName + "...\"}");
+                                    System.out.println("⚡ [CHUYỂN AUTO]: " + lastAutoTask.friendlyName + " -> "
+                                            + curAutoTask.friendlyName);
+                                    System.out.println(
+                                            "[AUTO_STATUS]: {\"isRunning\":true,\"status\":\"running\",\"autoType\":\""
+                                                    + curAutoTask.autoType + "\",\"parentAutoType\":\""
+                                                    + lastAutoTask.autoType + "\",\"subTask\":" + curAutoTask.isSubTask
+                                                    + ",\"message\":\"Đang chạy " + curAutoTask.friendlyName
+                                                    + "...\"}");
                                 }
                             }
                             lastAutoTask = curAutoTask;
-                        } catch (Throwable ignored) {}
+                        } catch (Throwable ignored) {
+                        }
                     }
                 } catch (Exception e) {
                     System.err.println("[GIÁM SÁT LỖI]: " + e.getMessage());

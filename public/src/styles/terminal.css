@@ -205,6 +205,13 @@
   border-color: rgba(50, 215, 75, 0.28);
 }
 
+.log-tag-success {
+  background: rgba(50, 215, 75, 0.18);
+  color: var(--apple-green);
+  border-color: rgba(50, 215, 75, 0.35);
+  font-weight: 600;
+}
+
 .log-tag-fish {
   background: rgba(100, 210, 255, 0.15);
   color: var(--apple-teal);
@@ -251,6 +258,13 @@
   background: rgba(40, 205, 65, 0.12);
   color: #1e7e34;
   border-color: rgba(40, 205, 65, 0.25);
+}
+
+[data-theme="light"] .log-tag-success {
+  background: rgba(40, 205, 65, 0.15);
+  color: #1e7e34;
+  border-color: rgba(40, 205, 65, 0.3);
+  font-weight: 600;
 }
 
 [data-theme="light"] .log-tag-fish {

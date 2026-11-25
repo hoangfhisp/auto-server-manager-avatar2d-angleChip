@@ -2,6 +2,7 @@ import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.File;
 import java.io.FileInputStream;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.text.SimpleDateFormat;
@@ -194,7 +195,8 @@ public class AvatarModAdapter {
     }
 
     /**
-     * Đọc toàn bộ danh sách các loại vật phẩm sự kiện trong ngày từ mảng static của SkGift
+     * Đọc toàn bộ danh sách các loại vật phẩm sự kiện trong ngày từ mảng static của
+     * SkGift
      * (SkGift.gN, SkGift.gName, SkGift.gX, SkGift.gY).
      * Cho phép thu thập đầy đủ cả Đường trắng, Bột bí ngô,... cùng một lúc!
      */
@@ -252,6 +254,7 @@ public class AvatarModAdapter {
         public int current;
         public int max;
         public String name;
+
         public ModFarmGiftStatus(int current, int max, String name) {
             this.current = current;
             this.max = max;
@@ -266,14 +269,16 @@ public class AvatarModAdapter {
      */
     public static ModFarmGiftStatus getModFarmGiftStatus() {
         ClassLoader cl = getClassLoader();
-        if (cl == null) return null;
+        if (cl == null)
+            return null;
         try {
             Class<?> skGiftCls = cl.loadClass("SkGift");
             try {
                 Method bootM = skGiftCls.getDeclaredMethod("boot");
                 bootM.setAccessible(true);
                 bootM.invoke(null);
-            } catch (Throwable ignored) {}
+            } catch (Throwable ignored) {
+            }
 
             Field curF = skGiftCls.getDeclaredField("lastX");
             Field maxF = skGiftCls.getDeclaredField("lastY");
@@ -312,20 +317,24 @@ public class AvatarModAdapter {
                 for (int i = 0; i < gn && i < xs.length; i++) {
                     if (xs[i] > 0) {
                         totalX = Math.max(totalX, xs[i]);
-                        if (ys != null && i < ys.length && ys[i] > 0) maxY = ys[i];
-                        if (names != null && i < names.length && names[i] != null) firstItem = names[i];
+                        if (ys != null && i < ys.length && ys[i] > 0)
+                            maxY = ys[i];
+                        if (names != null && i < names.length && names[i] != null)
+                            firstItem = names[i];
                     }
                 }
                 if (totalX > 0) {
                     return new ModFarmGiftStatus(totalX, maxY, firstItem);
                 }
             }
-        } catch (Throwable ignored) {}
+        } catch (Throwable ignored) {
+        }
         return null;
     }
 
     /**
-     * Quét chuỗi thông báo từ hàng đợi chữ bay trên màn hình (Flying Marquee Vector bx.if)
+     * Quét chuỗi thông báo từ hàng đợi chữ bay trên màn hình (Flying Marquee Vector
+     * bx.if)
      * Khi server gửi Packet -8, Bridge.popup sẽ đưa chuỗi vào hàng đợi này.
      */
     public static String checkFlyingBannerMessage() {
@@ -338,7 +347,8 @@ public class AvatarModAdapter {
         try {
             Class<?> containerCls = cl.loadClass(schema.dialogContainerClass);
             for (Field f : containerCls.getDeclaredFields()) {
-                if (java.lang.reflect.Modifier.isStatic(f.getModifiers()) && java.util.Vector.class.isAssignableFrom(f.getType())) {
+                if (java.lang.reflect.Modifier.isStatic(f.getModifiers())
+                        && java.util.Vector.class.isAssignableFrom(f.getType())) {
                     f.setAccessible(true);
                     java.util.Vector<?> vec = (java.util.Vector<?>) f.get(null);
                     if (vec != null && !vec.isEmpty()) {
@@ -351,7 +361,8 @@ public class AvatarModAdapter {
                                         String str = (String) itF.get(item);
                                         if (str != null && !str.trim().isEmpty() && str.length() > 5) {
                                             String lower = str.toLowerCase();
-                                            if (lower.contains("nhận") || lower.contains("chúc mừng") || lower.contains("số lượng")) {
+                                            if (lower.contains("nhận") || lower.contains("chúc mừng")
+                                                    || lower.contains("số lượng")) {
                                                 return str.trim();
                                             }
                                         }
@@ -375,7 +386,8 @@ public class AvatarModAdapter {
         public String source = "farm";
         public String rawText = "";
 
-        public EventProgressInfo(String itemName, int dropQty, int currentCount, int maxCount, String source, String rawText) {
+        public EventProgressInfo(String itemName, int dropQty, int currentCount, int maxCount, String source,
+                String rawText) {
             this.itemName = itemName;
             this.dropQty = dropQty;
             this.currentCount = currentCount;
@@ -385,29 +397,31 @@ public class AvatarModAdapter {
         }
 
         public String toJson() {
-            return "{\"item\":\"" + escapeJson(itemName) + "\",\"drop\":" + dropQty + ",\"current\":" + currentCount + ",\"max\":" + maxCount + ",\"source\":\"" + escapeJson(source) + "\"}";
+            return "{\"item\":\"" + escapeJson(itemName) + "\",\"drop\":" + dropQty + ",\"current\":" + currentCount
+                    + ",\"max\":" + maxCount + ",\"source\":\"" + escapeJson(source) + "\"}";
         }
     }
 
     public static String escapeJson(String s) {
-        if (s == null) return "";
+        if (s == null)
+            return "";
         return s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r");
     }
 
     private static final java.util.regex.Pattern EVENT_POPUP_PATTERN_PROGRESS = java.util.regex.Pattern.compile(
-        "(?i)(?:chúc\\s*mừng\\s+)?(?:bạn\\s+)?(?:đã\\s+)?nhận\\s+(?:được\\s+)?(?:\\+)?(\\d+)?\\s*([^\\r\\n\\./\\(\\)]+?)(?:\\s+từ\\s+([^\\r\\n\\./\\(\\)]+?))?[\\.\\s]*(?:số\\s*lượng[:\\s]*)?\\(?(\\d+)\\s*/\\s*(\\d+)\\)?",
-        java.util.regex.Pattern.CASE_INSENSITIVE | java.util.regex.Pattern.UNICODE_CASE | java.util.regex.Pattern.DOTALL
-    );
+            "(?i)(?:chúc\\s*mừng\\s+)?(?:bạn\\s+)?(?:đã\\s+)?nhận\\s+(?:được\\s+)?(?:\\+)?(\\d+)?\\s*([^\\r\\n\\./\\(\\)]+?)(?:\\s+từ\\s+([^\\r\\n\\./\\(\\)]+?))?[\\.\\s]*(?:số\\s*lượng[:\\s]*)?\\(?(\\d+)\\s*/\\s*(\\d+)\\)?",
+            java.util.regex.Pattern.CASE_INSENSITIVE | java.util.regex.Pattern.UNICODE_CASE
+                    | java.util.regex.Pattern.DOTALL);
 
     private static final java.util.regex.Pattern EVENT_POPUP_PATTERN_SIMPLE = java.util.regex.Pattern.compile(
-        "(?i)(?:chúc\\s*mừng\\s+)?(?:bạn\\s+)?(?:đã\\s+)?nhận\\s+(?:được\\s+)?(?:\\+)?(\\d+)?\\s*([^\\r\\n\\./\\(\\),]+?)(?:\\s+từ\\s+([^\\r\\n\\./\\(\\)]+?))?(?:[\\.!\\?]|\\s*\\([^\\)]*\\)|$)",
-        java.util.regex.Pattern.CASE_INSENSITIVE | java.util.regex.Pattern.UNICODE_CASE | java.util.regex.Pattern.DOTALL
-    );
+            "(?i)(?:chúc\\s*mừng\\s+)?(?:bạn\\s+)?(?:đã\\s+)?nhận\\s+(?:được\\s+)?(?:\\+)?(\\d+)?\\s*([^\\r\\n\\./\\(\\),]+?)(?:\\s+từ\\s+([^\\r\\n\\./\\(\\)]+?))?(?:[\\.!\\?]|\\s*\\([^\\)]*\\)|$)",
+            java.util.regex.Pattern.CASE_INSENSITIVE | java.util.regex.Pattern.UNICODE_CASE
+                    | java.util.regex.Pattern.DOTALL);
 
     public static EventProgressInfo parseEventText(String text) {
         if (text == null || text.trim().isEmpty())
             return null;
-        
+
         // 1. Khớp mẫu có số đếm hiện tại và hạn mức hôm nay (cur/max)
         java.util.regex.Matcher m1 = EVENT_POPUP_PATTERN_PROGRESS.matcher(text);
         if (m1.find()) {
@@ -513,10 +527,94 @@ public class AvatarModAdapter {
     // 1. ĐĂNG NHẬP (LOGIN)
     // =========================================================================
 
+    public static void forceResetNetworkSocket() {
+        ClassLoader cl = getClassLoader();
+        if (cl == null)
+            return;
+        ModSchema schema = getCurrentSchema();
+        if (schema == null || schema.networkClassName == null)
+            return;
+        try {
+            Class<?> netCls = cl.loadClass(schema.networkClassName);
+            Object netInst = null;
+            for (Method m : netCls.getDeclaredMethods()) {
+                if (m.getName().equals(schema.networkSingletonMethod) && m.getParameterCount() == 0
+                        && java.lang.reflect.Modifier.isStatic(m.getModifiers()) && m.getReturnType().equals(netCls)) {
+                    netInst = m.invoke(null);
+                    break;
+                }
+            }
+            if (netInst != null) {
+                // Đánh dấu ngắt kết nối chủ động (ag.for = true) để luồng đọc không bật popup "Kết nối thất bại"
+                try {
+                    Field forF = netCls.getField("for");
+                    if (forF.getType().equals(boolean.class)
+                            && java.lang.reflect.Modifier.isStatic(forF.getModifiers())) {
+                        forF.setBoolean(null, true);
+                    }
+                } catch (Throwable ignored) {
+                }
+                // Gọi đúng phương thức void do() (không nhầm với static do() hay boolean do())
+                // để đóng socket cũ, stream cũ và reset cờ kết nối (int=false, do=false)
+                try {
+                    for (Method m : netCls.getDeclaredMethods()) {
+                        if ("do".equals(m.getName()) && m.getParameterCount() == 0
+                                && !java.lang.reflect.Modifier.isStatic(m.getModifiers())
+                                && m.getReturnType().equals(void.class)) {
+                            m.setAccessible(true);
+                            m.invoke(netInst);
+                            break;
+                        }
+                    }
+                } catch (Throwable ignored) {
+                }
+                // Xóa sạch hàng đợi gói tin cũ (hg.do Vector) tránh gửi nhầm gói tin phiên cũ khi kết nối lại
+                try {
+                    for (Field f : netCls.getDeclaredFields()) {
+                        f.setAccessible(true);
+                        if (f.getType().equals(boolean.class)) {
+                            if ("int".equals(f.getName()) || "do".equals(f.getName())) {
+                                f.setBoolean(netInst, false);
+                            }
+                        } else if (!f.getType().isPrimitive() && !f.getType().equals(String.class)
+                                && !f.getType().equals(netCls)) {
+                            Object sub = f.get(netInst);
+                            if (sub != null && !(sub instanceof Thread)) {
+                                for (Field sf : sub.getClass().getDeclaredFields()) {
+                                    if (java.util.Vector.class.isAssignableFrom(sf.getType())) {
+                                        sf.setAccessible(true);
+                                        java.util.Vector<?> vec = (java.util.Vector<?>) sf.get(sub);
+                                        if (vec != null) {
+                                            vec.removeAllElements();
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } catch (Throwable ignored) {
+                }
+            }
+            Thread.sleep(400);
+            dismissCurrentDialogOnly();
+        } catch (Throwable ignored) {
+        }
+    }
+
     public static boolean login(String username, String password, int serverId, String serverName) {
         ClassLoader cl = getClassLoader();
         if (cl == null)
             return false;
+
+        ModSchema schema = getCurrentSchema();
+        // Bảo vệ tuyệt đối: Nếu socket đang sống và nhân vật đã ở trong game, KHÔNG reset socket / không đăng nhập đè gây văng nick!
+        Boolean curSock = getSocketConnectionStatus(cl, schema);
+        if (Boolean.TRUE.equals(curSock) && isPlayerInWorld(cl, schema)) {
+            return true;
+        }
+
+        forceResetNetworkSocket();
+        sessionBaselineCoins = -1; // Reset mốc xu ban đầu khi bắt đầu phiên đăng nhập mới
 
         String finalUser = (username != null && !username.isEmpty()) ? username : "";
         String finalPass = (password != null && !password.isEmpty()) ? password : "";
@@ -531,8 +629,6 @@ public class AvatarModAdapter {
         }
 
         dismissStartupPopups();
-
-        ModSchema schema = getCurrentSchema();
 
         try {
             Class<?> loginCls = cl.loadClass(schema.loginClassName);
@@ -584,7 +680,8 @@ public class AvatarModAdapter {
                     if (gvInst != null) {
                         if ("gX".equals(schema.loginExtraGvClass)) {
                             // [BẢN CHIPMIX]: gX.do là index thành phố (phải = 0 vì AngelChip.if[0] len=1).
-                            // Server ID được chọn qua trường ep.class = serverId + 1 (1 = Hoàn Mỹ, 2 = Diệu Kỳ...).
+                            // Server ID được chọn qua trường ep.class = serverId + 1 (1 = Hoàn Mỹ, 2 = Diệu
+                            // Kỳ...).
                             // Nếu gX.do = 1 sẽ gây lỗi "Index 1 out of bounds for length 1" tại bx.byte().
                             setField(gvInst, "do", 0, int.class);
                             setField(gvInst, "class", serverId + 1, int.class);
@@ -619,7 +716,7 @@ public class AvatarModAdapter {
                 }
 
                 if (!finalUser.isEmpty() && !finalPass.isEmpty()) {
-                    System.out.println("[QUY TRÌNH] -> [" + schema.name + "] Đang kết nối tới Server [" + serverName
+                    System.out.println("🚀 [KẾT NỐI]: Đang kết nối tới Server [" + serverName
                             + "] & đăng nhập nick [" + finalUser + "]...");
                     for (Method m : loginCls.getDeclaredMethods()) {
                         if (m.getName().equals(schema.loginMethodName) && m.getParameterCount() == 2) {
@@ -634,7 +731,8 @@ public class AvatarModAdapter {
                 }
             }
 
-            // Fallback trực tiếp qua Network Controller (fV / network class) nếu loginInstance không tìm thấy method
+            // Fallback trực tiếp qua Network Controller (fV / network class) nếu
+            // loginInstance không tìm thấy method
             if (!finalUser.isEmpty() && !finalPass.isEmpty()) {
                 try {
                     Class<?> fvCls = cl.loadClass("fV");
@@ -676,40 +774,9 @@ public class AvatarModAdapter {
     // 2. KIỂM TRA MẠNG & POPUP THÔNG BÁO (NETWORK & DIALOGS)
     // =========================================================================
 
-    public static boolean isNetworkConnected() {
-        ClassLoader cl = getClassLoader();
-        if (cl == null)
-            return false;
-
-        // 1. Nếu nhân vật đã hiện diện trong RAM (duLieuNguoiChoi / player instance !=
-        // null), bot chắc chắn 100% đang online kết nối Server
-        Object player = getActivePlayerInstance(cl);
-        if (player != null) {
-            // Kiểm tra xem có popup thông báo đè lên báo mất kết nối không
-            String dialog = checkActiveGameDialog();
-            if (dialog != null && !dialog.trim().isEmpty()) {
-                String lower = dialog.toLowerCase();
-                if (lower.contains("mất kết nối") || lower.contains("kết nối thất bại")
-                        || lower.contains("mạng game bị ngắt")) {
-                    return false;
-                }
-            }
-            return true;
-        }
-
-        // 2. Nếu chưa vào map (đang ở màn hình đăng nhập hoặc đang bắt tay):
-        // Kiểm tra xem có popup thông báo lỗi mạng không
-        String dialog = checkActiveGameDialog();
-        if (dialog != null && !dialog.trim().isEmpty()) {
-            String lower = dialog.toLowerCase();
-            if (lower.contains("mất kết nối") || lower.contains("kết nối thất bại")
-                    || lower.contains("mạng game bị ngắt")) {
-                return false;
-            }
-        }
-
-        // 3. Fallback kiểm tra qua Network class
-        ModSchema schema = getCurrentSchema();
+    public static Boolean getSocketConnectionStatus(ClassLoader cl, ModSchema schema) {
+        if (cl == null || schema == null || schema.networkClassName == null)
+            return null;
         try {
             Class<?> netCls = cl.loadClass(schema.networkClassName);
             for (Method m : netCls.getDeclaredMethods()) {
@@ -722,7 +789,7 @@ public class AvatarModAdapter {
                                     !java.lang.reflect.Modifier.isStatic(dm.getModifiers())
                                     && dm.getReturnType().equals(boolean.class)) {
                                 dm.setAccessible(true);
-                                return (boolean) dm.invoke(netInst);
+                                return (Boolean) dm.invoke(netInst);
                             }
                         }
                     }
@@ -730,9 +797,234 @@ public class AvatarModAdapter {
             }
         } catch (Throwable ignored) {
         }
+        return null;
+    }
 
-        // Nếu không có player và không có kết nối socket xác thực -> Chưa kết nối
+    public static boolean isOnLoginScreen(ClassLoader cl, ModSchema schema) {
+        if (cl == null || schema == null || schema.dialogContainerClass == null)
+            return false;
+        try {
+            Class<?> containerCls = cl.loadClass(schema.dialogContainerClass);
+            for (Field f : containerCls.getDeclaredFields()) {
+                if (java.lang.reflect.Modifier.isStatic(f.getModifiers()) && "do".equals(f.getName())) {
+                    if (schema.superIdentifierClass != null && f.getType().getName().equals(schema.superIdentifierClass)) {
+                        f.setAccessible(true);
+                        Object screen = f.get(null);
+                        if (screen == null)
+                            return false;
+                        String screenName = screen.getClass().getName();
+                        if (schema.loginClassName != null && screenName.equals(schema.loginClassName))
+                            return true;
+                        if (schema.loginExtraGvClass != null && screenName.equals(schema.loginExtraGvClass))
+                            return true;
+                        return false;
+                    }
+                }
+            }
+        } catch (Throwable ignored) {
+        }
         return false;
+    }
+
+    public static boolean playerHasValidName(Object playerObj, ModSchema schema) {
+        if (playerObj == null || schema == null)
+            return false;
+        try {
+            Class<?> pCls = playerObj.getClass();
+            while (pCls != null && !pCls.equals(Object.class)) {
+                for (Field f : pCls.getDeclaredFields()) {
+                    if (!java.lang.reflect.Modifier.isStatic(f.getModifiers()) && f.getType().equals(String.class)) {
+                        boolean match = false;
+                        if (schema.playerNameFields != null) {
+                            for (String nf : schema.playerNameFields) {
+                                if (nf.equals(f.getName())) {
+                                    match = true;
+                                    break;
+                                }
+                            }
+                        }
+                        if (match) {
+                            f.setAccessible(true);
+                            String val = (String) f.get(playerObj);
+                            if (val != null) {
+                                val = val.trim();
+                                if (!val.isEmpty() && !"null".equalsIgnoreCase(val)) {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+                pCls = pCls.getSuperclass();
+            }
+        } catch (Throwable ignored) {
+        }
+        return false;
+    }
+
+    public static boolean isPlayerInWorld() {
+        ClassLoader cl = getClassLoader();
+        return isPlayerInWorld(cl, getCurrentSchema());
+    }
+
+    public static boolean isPlayerInWorld(ClassLoader cl, ModSchema schema) {
+        if (cl == null || schema == null)
+            return false;
+        if (isOnLoginScreen(cl, schema))
+            return false;
+        Object player = getActivePlayerInstance(cl, schema);
+        return player != null && playerHasValidName(player, schema);
+    }
+
+    public static boolean isNetworkConnected() {
+        ClassLoader cl = getClassLoader();
+        if (cl == null)
+            return false;
+
+        ModSchema schema = getCurrentSchema();
+        Boolean socketConnected = getSocketConnectionStatus(cl, schema);
+
+        // 1. Kiểm tra socket thực tế: Nếu socket đã đóng (!socketConnected) -> Chắc chắn 100% mất kết nối
+        if (socketConnected != null && !socketConnected.booleanValue()) {
+            return false;
+        }
+
+        // 2. Nếu socket đang sống và nhân vật đã thực sự vào trong game (có tên nhân vật & không ở màn hình login)
+        // -> Đang kết nối khỏe mạnh, không để popup cũ đè lên gây hiểu nhầm mất kết nối
+        if (Boolean.TRUE.equals(socketConnected) && isPlayerInWorld(cl, schema)) {
+            return true;
+        }
+
+        // 3. Nếu đang ở ngoài màn hình login / đang kết nối: kiểm tra xem có popup báo mất kết nối không
+        String dialog = checkActiveGameDialog();
+        if (dialog != null && !dialog.trim().isEmpty()) {
+            String lower = dialog.toLowerCase();
+            if (lower.contains("mất kết nối") || lower.contains("kết nối thất bại")
+                    || lower.contains("mạng game bị ngắt")) {
+                return false;
+            }
+        }
+
+        return socketConnected != null && socketConnected.booleanValue();
+    }
+
+    /**
+     * Lấy tên hiển thị thân thiện của loại Auto
+     */
+    public static String getAutoFriendlyName(String type) {
+        if (type == null)
+            return "Auto";
+        String t = type.toLowerCase();
+        if (t.contains("farm") || t.contains("nong"))
+            return "Auto Farm";
+        if (t.contains("diamond") || t.contains("kc") || t.contains("kim"))
+            return "Auto Kim Cương";
+        if (t.contains("fish") || t.contains("cau") || t.contains("cc"))
+            return "Auto Câu Cá";
+        if (t.contains("sell_ore") || t.contains("banda") || t.contains("stone") || t.contains("bd")
+                || t.contains("đá"))
+            return "Auto Bán Đá";
+        if (t.contains("event") || t.contains("sk"))
+            return "Auto Sự Kiện";
+        if (t.contains("tai_xiu"))
+            return "Auto Tài Xỉu";
+        if (t.contains("baby"))
+            return "Auto Chăm Em Bé";
+        return "Auto " + type;
+    }
+
+    private static volatile boolean builtinKeepAliveLogged = false;
+
+    public static void resetKeepAliveState() {
+        builtinKeepAliveLogged = false;
+    }
+
+    /**
+     * Chuyển map nhanh qua Map ID bằng cơ chế menu của Game Mod (lớp bd)
+     * Map ID 25: Nông trại
+     */
+    public static boolean fastSwitchMap(int mapId) {
+        return fastSwitchMap(mapId, true);
+    }
+
+    public static boolean fastSwitchMap(int mapId, boolean logIfAlreadyInMap) {
+        ClassLoader cl = getClassLoader();
+        if (cl == null)
+            return false;
+
+        try {
+            // 1. Kiểm tra xem đã ở đúng map đó chưa qua fj.new
+            Class<?> fjCls = cl.loadClass("fj");
+            Field newF = fjCls.getField("new");
+            int currentMap = newF.getInt(null);
+            if (currentMap == mapId) {
+                if (logIfAlreadyInMap) {
+                    System.out.println("🗺️ [CHUYỂN MAP]: Nhân vật đã ở sẵn Map ID " + mapId + " (Nông trại)!");
+                }
+                return true;
+            }
+
+            // 2. Kích hoạt chuyển map nhanh qua lớp bd của Game Mod
+            try {
+                Class<?> bdCls = cl.loadClass("bd");
+                Constructor<?> ctor = bdCls.getConstructor(int.class);
+                Object bdInst = ctor.newInstance(mapId);
+                Method doMethod = bdCls.getMethod("do");
+                doMethod.invoke(bdInst);
+                System.out.println("🗺️ [CHUYỂN MAP NHANH]: Đã chuyển sang Map ID " + mapId + " (Nông trại) qua Game Mod!");
+                return true;
+            } catch (Throwable t) {
+                // Fallback nếu bd có vấn đề: dùng aQ.byte hoặc aQ.try
+                Class<?> aqCls = cl.loadClass("aQ");
+                try {
+                    Method byteM = aqCls.getMethod("byte", int.class);
+                    byteM.invoke(null, mapId);
+                } catch (Throwable t2) {
+                    Method tryM = aqCls.getMethod("try", int.class);
+                    tryM.invoke(null, mapId);
+                }
+                System.out.println("🗺️ [CHUYỂN MAP NHANH]: Đã gọi chuyển sang Map ID " + mapId + " (Nông trại)!");
+                return true;
+            }
+        } catch (Throwable t) {
+            System.err.println("⚠️ [CHUYỂN MAP NHANH LỖI]: " + t.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Bật cơ chế tự động Giữ kết nối có sẵn của Game Mod (lớp gs, trường case:Z)
+     * Khi cờ case = true, vòng lặp game tick (gs.byte) tự động gửi ping duy trì socket mỗi 15-30s
+     */
+    public static boolean enableBuiltinKeepAlive() {
+        ClassLoader cl = getClassLoader();
+        if (cl == null)
+            return false;
+
+        try {
+            Class<?> gsCls = cl.loadClass("gs");
+            Method doM = gsCls.getMethod("do");
+            Object gsInst = doM.invoke(null);
+            if (gsInst != null) {
+                Field caseF = gsCls.getField("case");
+                caseF.setAccessible(true);
+                caseF.setBoolean(gsInst, true);
+                if (!builtinKeepAliveLogged) {
+                    builtinKeepAliveLogged = true;
+                    System.out.println("📡 [GIỮ KẾT NỐI]: Đã kích hoạt Giữ kết nối tự động của Game!");
+                }
+                return true;
+            }
+        } catch (Throwable ignored) {
+        }
+        return false;
+    }
+
+    /**
+     * Tương thích ngược: chuyển hướng hoàn toàn sang cơ chế Giữ kết nối có sẵn của Game Mod
+     */
+    public static void sendKeepAlivePing() {
+        enableBuiltinKeepAlive();
     }
 
     public static String checkActiveGameDialog() {
@@ -760,7 +1052,8 @@ public class AvatarModAdapter {
             for (Field f : containerCls.getDeclaredFields()) {
                 if (java.lang.reflect.Modifier.isStatic(f.getModifiers())) {
                     String fTypeName = f.getType().getSimpleName();
-                    if (fTypeName.equals(pointerType) || fTypeName.equals("bt") || fTypeName.equals("dJ") || fTypeName.equals("dL")) {
+                    if (fTypeName.equals(pointerType) || fTypeName.equals("bt") || fTypeName.equals("dJ")
+                            || fTypeName.equals("dL")) {
                         f.setAccessible(true);
                         Object dObj = f.get(null);
                         // Khi dialog đóng (sau br.case() hoặc chưa mở), con trỏ này bằng null 100%!
@@ -796,7 +1089,8 @@ public class AvatarModAdapter {
             return active;
         }
 
-        // 2. Nếu active dialog vừa bị mod tự đóng (do = null), kiểm tra instance dialog tĩnh trong container
+        // 2. Nếu active dialog vừa bị mod tự đóng (do = null), kiểm tra instance dialog
+        // tĩnh trong container
         ClassLoader cl = getClassLoader();
         if (cl == null)
             return null;
@@ -808,7 +1102,8 @@ public class AvatarModAdapter {
             for (Field f : containerCls.getDeclaredFields()) {
                 if (java.lang.reflect.Modifier.isStatic(f.getModifiers())) {
                     String fTypeName = f.getType().getSimpleName();
-                    if (fTypeName.equals(dialogClsName) || fTypeName.equals("h") || fTypeName.equals("s") || fTypeName.equals("t") || fTypeName.equals("h_0")) {
+                    if (fTypeName.equals(dialogClsName) || fTypeName.equals("h") || fTypeName.equals("s")
+                            || fTypeName.equals("t") || fTypeName.equals("h_0")) {
                         f.setAccessible(true);
                         Object dObj = f.get(null);
                         if (dObj != null) {
@@ -1027,7 +1322,7 @@ public class AvatarModAdapter {
         }
     }
 
-    public static void dismissCurrentDialog() {
+    public static void dismissCurrentDialogOnly() {
         ClassLoader cl = getClassLoader();
         if (cl != null) {
             ModSchema schema = getCurrentSchema();
@@ -1040,7 +1335,14 @@ public class AvatarModAdapter {
                 }
             }
         }
-        selectDialogOptionLeftAndConfirm();
+    }
+
+    public static void dismissCurrentDialog() {
+        dismissCurrentDialogOnly();
+        String remaining = checkActiveGameDialog();
+        if (remaining != null && !remaining.trim().isEmpty()) {
+            selectDialogOptionLeftAndConfirm();
+        }
     }
 
     // =========================================================================
@@ -1048,6 +1350,7 @@ public class AvatarModAdapter {
     private static long lastKnownCoins = 0;
     private static int lastKnownGold = 0;
     private static int lastKnownLockedGold = 0;
+    private static long sessionBaselineCoins = -1;
 
     // =========================================================================
 
@@ -1101,13 +1404,18 @@ public class AvatarModAdapter {
                             boolean isStatic = java.lang.reflect.Modifier.isStatic(f.getModifiers());
 
                             // Mảng tiền xu / lượng (int[])
-                            if (!isStatic && (f.getName().equals(schema.playerCoinsArrayField) || f.getType().equals(int[].class))) {
+                            if (!isStatic && (f.getName().equals(schema.playerCoinsArrayField)
+                                    || f.getType().equals(int[].class))) {
                                 if (f.getType().equals(int[].class)) {
                                     int[] moneyArr = (int[]) f.get(playerObj);
                                     if (moneyArr != null && moneyArr.length > 0) {
                                         stats.coins = moneyArr[0];
-                                        if (stats.coins > 0)
+                                        if (stats.coins > 0) {
                                             lastKnownCoins = stats.coins;
+                                            if (sessionBaselineCoins < 0) {
+                                                sessionBaselineCoins = stats.coins;
+                                            }
+                                        }
                                         if (moneyArr.length > 1 && moneyArr[1] >= 0) {
                                             stats.gold = moneyArr[1];
                                             if (stats.gold > 0)
@@ -1165,7 +1473,8 @@ public class AvatarModAdapter {
                 stats.lockedGold = lastKnownLockedGold;
             }
 
-            // Fallback tên nhân vật từ tài khoản đăng nhập RMS nếu trong RAM chưa kịp nạp tên
+            // Fallback tên nhân vật từ tài khoản đăng nhập RMS nếu trong RAM chưa kịp nạp
+            // tên
             if (stats.playerName.isEmpty()) {
                 String[] rmsCreds = readCredentialsFromRms(System.getProperty("avatar.appId"));
                 if (rmsCreds != null && rmsCreds[0] != null && !rmsCreds[0].isEmpty()) {
@@ -1175,7 +1484,8 @@ public class AvatarModAdapter {
         } catch (Throwable ignored) {
         }
 
-        // 3.1.1 Trích xuất Avatar nhân vật trực tiếp từ Canvas / Sprite Model (Cache theo Item IDs & Trang bị)
+        // 3.1.1 Trích xuất Avatar nhân vật trực tiếp từ Canvas / Sprite Model (Cache
+        // theo Item IDs & Trang bị)
         try {
             Object playerObj = getActivePlayerInstance(cl, schema);
             if (playerObj != null) {
@@ -1195,7 +1505,8 @@ public class AvatarModAdapter {
                     lastAvatarExtractTime = now;
                     avatarExtractCount = 1;
                 } else if (!avatarStabilized) {
-                    // Tự động tái trích xuất 1-2 lần trong 10-15s đầu (sau khi toàn bộ Sprite/RMS hiệu ứng nạp đầy đủ vào RAM)
+                    // Tự động tái trích xuất 1-2 lần trong 10-15s đầu (sau khi toàn bộ Sprite/RMS
+                    // hiệu ứng nạp đầy đủ vào RAM)
                     if (now - lastAvatarExtractTime > 4000) {
                         String newExtracted = exportPlayerAvatarBase64();
                         if (newExtracted != null && !newExtracted.isEmpty()) {
@@ -1242,6 +1553,26 @@ public class AvatarModAdapter {
                             startedTs = f.getLong(null);
                     }
                 } catch (Throwable ignored) {
+                }
+            }
+
+            // 3.2.1 Bảo vệ & tự động khắc phục lỗi nhảy số Xu Up bằng Xu Có (Earned Coins
+            // Jump Glitch)
+            // Khi mod cộng dồn nhầm toàn bộ số dư tài khoản vào Xu Up sau khi
+            // reconnect/chuyển map
+            if (stats.coins > 0 && sessionBaselineCoins > 0) {
+                long realEarnedExpected = stats.coins - sessionBaselineCoins;
+                boolean isJumpGlitch = (stats.earnedCoins == stats.coins && stats.coins > 1000) ||
+                        (stats.earnedCoins > realEarnedExpected + 500000 && stats.earnedCoins >= stats.coins * 0.9);
+                if (isJumpGlitch) {
+                    int correctedEarned = (int) Math.max(0, realEarnedExpected);
+                    stats.earnedCoins = correctedEarned;
+                    try {
+                        if (schema.earnedCoinsField != null && !schema.earnedCoinsField.isEmpty()) {
+                            setStaticField(aQCls, schema.earnedCoinsField, int.class, correctedEarned);
+                        }
+                    } catch (Throwable ignored) {
+                    }
                 }
             }
 
@@ -1334,21 +1665,27 @@ public class AvatarModAdapter {
                 stats.expiresAt = sdf.format(new Date(baseTs + upDays * 86400000L));
             }
 
-            // Đảm bảo tuyệt đối: Nếu hạn hiển thị là "Vĩnh viễn" thì expiresAtTimestamp phải bằng 0 (KHÔNG BAO GIỜ tính là hết hạn)
-            if (stats.expiresAt != null && (stats.expiresAt.contains("Vĩnh viễn") || stats.expiresAt.equalsIgnoreCase("Vĩnh viễn"))) {
+            // Đảm bảo tuyệt đối: Nếu hạn hiển thị là "Vĩnh viễn" thì expiresAtTimestamp
+            // phải bằng 0 (KHÔNG BAO GIỜ tính là hết hạn)
+            if (stats.expiresAt != null
+                    && (stats.expiresAt.contains("Vĩnh viễn") || stats.expiresAt.equalsIgnoreCase("Vĩnh viễn"))) {
                 stats.expiresAtTimestamp = 0;
             }
 
             // Kiểm tra trạng thái hoàn thành mục tiêu trực tiếp từ số liệu Mod trong RAM:
             // 1. Hoàn thành mục tiêu Up Xu:
-            // CHỈ so sánh với stats.earnedCoins (Xu Up / Xu kiếm thêm được trong phiên), TUYỆT ĐỐI KHÔNG so sánh với stats.coins (Xu Có trong người)!
+            // CHỈ so sánh với stats.earnedCoins (Xu Up / Xu kiếm thêm được trong phiên),
+            // TUYỆT ĐỐI KHÔNG so sánh với stats.coins (Xu Có trong người)!
             if (stats.targetCoins > 0 && stats.earnedCoins >= stats.targetCoins) {
                 stats.isTargetReached = true;
                 stats.targetReachedReason = "coins";
             }
             // 2. Hết hạn ngày Up:
-            // CHỈ kích hoạt khi có giới hạn ngày (upDays > 0), hạn không phải Vĩnh viễn, expiresAtTimestamp > 0 và thời gian hiện tại đã vượt quá hạn
-            else if (stats.upDays > 0 && stats.expiresAtTimestamp > 0 && (stats.expiresAt != null && !stats.expiresAt.contains("Vĩnh viễn")) && System.currentTimeMillis() >= stats.expiresAtTimestamp) {
+            // CHỈ kích hoạt khi có giới hạn ngày (upDays > 0), hạn không phải Vĩnh viễn,
+            // expiresAtTimestamp > 0 và thời gian hiện tại đã vượt quá hạn
+            else if (stats.upDays > 0 && stats.expiresAtTimestamp > 0
+                    && (stats.expiresAt != null && !stats.expiresAt.contains("Vĩnh viễn"))
+                    && System.currentTimeMillis() >= stats.expiresAtTimestamp) {
                 stats.isTargetReached = true;
                 stats.targetReachedReason = "days";
             }
@@ -1599,7 +1936,8 @@ public class AvatarModAdapter {
                         || "banda".equalsIgnoreCase(activeTask.autoType)
                         || "baby".equalsIgnoreCase(activeTask.autoType))) {
                     // Nếu bot đang đi bán đá hoặc chăm baby từ Auto Kim Cương
-                    if ("diamond".equalsIgnoreCase(activeTask.parentAutoType) || (activeTask.isSubTask && cachedDiamondInstance != null)) {
+                    if ("diamond".equalsIgnoreCase(activeTask.parentAutoType)
+                            || (activeTask.isSubTask && cachedDiamondInstance != null)) {
                         isDiamondActive = true;
                         if ("sell_ore".equalsIgnoreCase(activeTask.autoType)
                                 || "banda".equalsIgnoreCase(activeTask.autoType)) {
@@ -1829,7 +2167,8 @@ public class AvatarModAdapter {
                 }
             } else if (activeTask != null && ("sell_ore".equalsIgnoreCase(activeTask.autoType)
                     || "banda".equalsIgnoreCase(activeTask.autoType))) {
-                if ("fish".equalsIgnoreCase(activeTask.parentAutoType) || (activeTask.isSubTask && cachedFishInstance != null)) {
+                if ("fish".equalsIgnoreCase(activeTask.parentAutoType)
+                        || (activeTask.isSubTask && cachedFishInstance != null)) {
                     isFishActive = true;
                 }
             }
@@ -2014,6 +2353,29 @@ public class AvatarModAdapter {
         return getActivePlayerInstance(cl, getCurrentSchema());
     }
 
+    public static void clearPlayerInstance() {
+        ClassLoader cl = getClassLoader();
+        if (cl == null)
+            return;
+        ModSchema schema = getCurrentSchema();
+        if (schema == null || schema.playerContainerClasses == null)
+            return;
+        for (String containerName : schema.playerContainerClasses) {
+            try {
+                Class<?> containerCls = cl.loadClass(containerName);
+                for (Field f : containerCls.getDeclaredFields()) {
+                    if (java.lang.reflect.Modifier.isStatic(f.getModifiers())) {
+                        if (schema.playerClassName != null && f.getType().getName().equals(schema.playerClassName)) {
+                            f.setAccessible(true);
+                            f.set(null, null);
+                        }
+                    }
+                }
+            } catch (Throwable ignored) {
+            }
+        }
+    }
+
     public static Object getActivePlayerInstance(ClassLoader cl, ModSchema schema) {
         if (cl == null || schema == null)
             return null;
@@ -2088,7 +2450,8 @@ public class AvatarModAdapter {
                                 Object item = vec.elementAt(i);
                                 if (item != null) {
                                     for (Field itemField : item.getClass().getDeclaredFields()) {
-                                        if (itemField.getType().equals(short.class) || itemField.getType().equals(int.class)) {
+                                        if (itemField.getType().equals(short.class)
+                                                || itemField.getType().equals(int.class)) {
                                             itemField.setAccessible(true);
                                             sb.append(itemField.get(item)).append(",");
                                         }
@@ -2107,9 +2470,12 @@ public class AvatarModAdapter {
     }
 
     /**
-     * Trích xuất trực tiếp Model / Sprite nhân vật Avatar sang Base64 PNG / Animated GIF
-     * Phản ánh chuẩn xác 100% diện mạo và hiệu ứng trang bị (cánh, hào quang) của nhân vật trong game
-     * KHÔNG can thiệp/làm sai lệch tư thế tự nhiên hay trạng thái di chuyển/câu cá của nhân vật.
+     * Trích xuất trực tiếp Model / Sprite nhân vật Avatar sang Base64 PNG /
+     * Animated GIF
+     * Phản ánh chuẩn xác 100% diện mạo và hiệu ứng trang bị (cánh, hào quang) của
+     * nhân vật trong game
+     * KHÔNG can thiệp/làm sai lệch tư thế tự nhiên hay trạng thái di chuyển/câu cá
+     * của nhân vật.
      */
     public static String exportPlayerAvatarBase64() {
         try {
@@ -2125,14 +2491,16 @@ public class AvatarModAdapter {
             int footY = 48;
             int centerX = w / 2;
 
-            // 1. Warm-up pre-paint để kích hoạt nạp lười (lazy-load) mọi sprite/part item từ RMS hoặc Server
+            // 1. Warm-up pre-paint để kích hoạt nạp lười (lazy-load) mọi sprite/part item
+            // từ RMS hoặc Server
             try {
                 javax.microedition.lcdui.Image warmImg = javax.microedition.lcdui.Image.createImage(w, h);
                 if (warmImg != null) {
                     invokePlayerPaint(playerObj, warmImg.getGraphics(), centerX, footY);
                 }
                 Thread.sleep(150); // Cho phép luồng nạp RMS / Image nạp kịp vào bộ nhớ
-            } catch (Throwable ignored) {}
+            } catch (Throwable ignored) {
+            }
 
             java.util.List<int[]> frames = new java.util.ArrayList<int[]>();
             int[] pixelCounts = new int[4];
@@ -2140,15 +2508,18 @@ public class AvatarModAdapter {
 
             for (int f = 0; f < 4; f++) {
                 int[] rgb = captureCleanFrame(playerObj, w, h, centerX, footY);
-                if (rgb == null) break;
+                if (rgb == null)
+                    break;
 
                 int count = 0;
                 for (int c : rgb) {
-                    if ((c & 0xFF000000) != 0) count++;
+                    if ((c & 0xFF000000) != 0)
+                        count++;
                 }
                 frames.add(rgb);
                 pixelCounts[f] = count;
-                if (count > maxPixels) maxPixels = count;
+                if (count > maxPixels)
+                    maxPixels = count;
 
                 if (f < 3) {
                     try {
@@ -2158,7 +2529,8 @@ public class AvatarModAdapter {
                 }
             }
 
-            // Kiểm tra tính toàn vẹn của các khung hình: nếu có frame bị thiếu bộ phận do nạp trễ (pixel count < 75% maxPixels),
+            // Kiểm tra tính toàn vẹn của các khung hình: nếu có frame bị thiếu bộ phận do
+            // nạp trễ (pixel count < 75% maxPixels),
             // tiến hành chụp lại 4 frame hoàn chỉnh một lần nữa khi các asset đã nạp 100%.
             if (maxPixels > 0 && frames.size() == 4) {
                 boolean hasIncompleteFrame = false;
@@ -2172,17 +2544,22 @@ public class AvatarModAdapter {
                     frames.clear();
                     for (int f = 0; f < 4; f++) {
                         int[] rgb = captureCleanFrame(playerObj, w, h, centerX, footY);
-                        if (rgb == null) break;
+                        if (rgb == null)
+                            break;
                         frames.add(rgb);
                         if (f < 3) {
-                            try { Thread.sleep(90); } catch (Throwable ignored) {}
+                            try {
+                                Thread.sleep(90);
+                            } catch (Throwable ignored) {
+                            }
                         }
                     }
                 }
             }
 
             if (maxPixels < 120) {
-                // Chỉ có bóng nhân vật dưới chân (chưa nạp xong part áo/quần/tóc/cánh sau khi reconnect/GC), bỏ qua không ghi đè avatar
+                // Chỉ có bóng nhân vật dưới chân (chưa nạp xong part áo/quần/tóc/cánh sau khi
+                // reconnect/GC), bỏ qua không ghi đè avatar
                 return null;
             }
 
@@ -2198,7 +2575,8 @@ public class AvatarModAdapter {
                                 break;
                             }
                         }
-                        if (hasDiff) break;
+                        if (hasDiff)
+                            break;
                     }
                 }
 
@@ -2211,7 +2589,8 @@ public class AvatarModAdapter {
 
                 // Ảnh PNG tĩnh sắc nét nếu nhân vật không mặc đồ có hiệu ứng động
                 int[] f0 = frames.get(0);
-                java.awt.image.BufferedImage staticImg = new java.awt.image.BufferedImage(w, h, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+                java.awt.image.BufferedImage staticImg = new java.awt.image.BufferedImage(w, h,
+                        java.awt.image.BufferedImage.TYPE_INT_ARGB);
                 staticImg.setRGB(0, 0, w, h, f0, 0, w);
                 java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
                 javax.imageio.ImageIO.write(staticImg, "png", baos);
@@ -2224,27 +2603,34 @@ public class AvatarModAdapter {
     }
 
     /**
-     * Bóc tách nền trong suốt chính xác tuyệt đối bằng Dual-Canvas Differential Keying.
-     * Render trên nền Đen và nền Trắng để loại bỏ 100% viền màu tím/hồng (Magenta fringing),
-     * đồng thời bảo toàn hoàn hảo màu trắng (#FFFFFF), màu đen và bóng bán trong suốt của nhân vật.
+     * Bóc tách nền trong suốt chính xác tuyệt đối bằng Dual-Canvas Differential
+     * Keying.
+     * Render trên nền Đen và nền Trắng để loại bỏ 100% viền màu tím/hồng (Magenta
+     * fringing),
+     * đồng thời bảo toàn hoàn hảo màu trắng (#FFFFFF), màu đen và bóng bán trong
+     * suốt của nhân vật.
      */
     private static int[] captureCleanFrame(Object playerObj, int w, int h, int centerX, int footY) {
         try {
             // 1. Render trên nền Đen (0x000000)
             javax.microedition.lcdui.Image imgB = javax.microedition.lcdui.Image.createImage(w, h);
-            if (imgB == null) return null;
+            if (imgB == null)
+                return null;
             javax.microedition.lcdui.Graphics gB = imgB.getGraphics();
             gB.setColor(0x00000000);
             gB.fillRect(0, 0, w, h);
-            if (!invokePlayerPaint(playerObj, gB, centerX, footY)) return null;
+            if (!invokePlayerPaint(playerObj, gB, centerX, footY))
+                return null;
 
             // 2. Render trên nền Trắng (0xFFFFFF)
             javax.microedition.lcdui.Image imgW = javax.microedition.lcdui.Image.createImage(w, h);
-            if (imgW == null) return null;
+            if (imgW == null)
+                return null;
             javax.microedition.lcdui.Graphics gW = imgW.getGraphics();
             gW.setColor(0x00FFFFFF);
             gW.fillRect(0, 0, w, h);
-            if (!invokePlayerPaint(playerObj, gW, centerX, footY)) return null;
+            if (!invokePlayerPaint(playerObj, gW, centerX, footY))
+                return null;
 
             int[] rgbB = new int[w * h];
             int[] rgbW = new int[w * h];
@@ -2282,8 +2668,10 @@ public class AvatarModAdapter {
         }
     }
 
-    private static boolean invokePlayerPaint(Object playerObj, javax.microedition.lcdui.Graphics g, int centerX, int footY) {
-        if (playerObj == null || g == null) return false;
+    private static boolean invokePlayerPaint(Object playerObj, javax.microedition.lcdui.Graphics g, int centerX,
+            int footY) {
+        if (playerObj == null || g == null)
+            return false;
         try {
             for (Method m : playerObj.getClass().getMethods()) {
                 Class<?>[] pTypes = m.getParameterTypes();
@@ -2311,12 +2699,14 @@ public class AvatarModAdapter {
                     return true;
                 }
             }
-        } catch (Throwable ignored) {}
+        } catch (Throwable ignored) {
+        }
         return false;
     }
 
     /**
-     * Thuật toán nén chuẩn GIF89a đa khung hình (Multi-Frame Animated GIF) trong suốt không cần thư viện ngoài
+     * Thuật toán nén chuẩn GIF89a đa khung hình (Multi-Frame Animated GIF) trong
+     * suốt không cần thư viện ngoài
      */
     public static byte[] encodeMultiFrameGif(java.util.List<int[]> frames, int width, int height,
             int delayHundredths) {
@@ -2599,7 +2989,6 @@ public class AvatarModAdapter {
             } catch (Throwable ignored) {
             }
 
-
         } catch (Throwable t) {
             System.err.println("[FARM SETUP ERR]: " + t.getMessage());
         }
@@ -2665,7 +3054,6 @@ public class AvatarModAdapter {
                 }
             }
 
-
         } catch (Throwable t) {
             System.err.println("[DIAMOND SETUP ERR]: " + t.getMessage());
         }
@@ -2727,7 +3115,8 @@ public class AvatarModAdapter {
             if (activeTask != null && "fish".equalsIgnoreCase(activeTask.autoType) && activeTask.taskInstance != null) {
                 if (backToFarm) {
                     long newIntervalMs = (long) farmIntervalMinutes * 60000L;
-                    boolean isChipMix = (schema == ModSchema.CHIP_MIX || "Bản ChipMix Full (build13)".equals(schema.name));
+                    boolean isChipMix = (schema == ModSchema.CHIP_MIX
+                            || "Bản ChipMix Full (build13)".equals(schema.name));
                     if (isChipMix) {
                         setField(activeTask.taskInstance, "if", newIntervalMs, long.class);
                     } else {
@@ -2747,7 +3136,6 @@ public class AvatarModAdapter {
                     setField(activeTask.taskInstance, schema.fishTargetMsField, Long.MAX_VALUE, long.class);
                 }
             }
-
 
         } catch (Throwable t) {
             System.err.println("[FISH SETUP ERR]: " + t.getMessage());
@@ -2789,13 +3177,16 @@ public class AvatarModAdapter {
                 }
             }
 
-
         } catch (Throwable t) {
             System.err.println("[SELL ORE SETUP ERR]: " + t.getMessage());
         }
     }
 
     public static void applyUpThueSetup(int targetCoins, int upDays) {
+        applyUpThueSetup(targetCoins, upDays, true);
+    }
+
+    public static void applyUpThueSetup(int targetCoins, int upDays, boolean logToConsole) {
         ClassLoader cl = getClassLoader();
         if (cl == null)
             return;
@@ -2831,9 +3222,11 @@ public class AvatarModAdapter {
             } catch (Throwable ignored) {
             }
 
-            System.out.println("✅ [CÀI ĐẶT UP THUÊ]: Đã cập nhật -> Mục tiêu: "
-                    + (targetCoins > 0 ? (targetCoins + " Xu") : "Không giới hạn") + ", Thời gian: "
-                    + (upDays > 0 ? (upDays + " Ngày") : "Vĩnh viễn"));
+            if (logToConsole) {
+                System.out.println("✅ [CÀI ĐẶT UP THUÊ]: Đã cập nhật -> Mục tiêu: "
+                        + (targetCoins > 0 ? (targetCoins + " Xu") : "Không giới hạn") + ", Thời gian: "
+                        + (upDays > 0 ? (upDays + " Ngày") : "Vĩnh viễn"));
+            }
         } catch (Throwable t) {
             System.err.println("[UP THUÊ SETUP ERR]: " + t.getMessage());
         }
@@ -2853,6 +3246,7 @@ public class AvatarModAdapter {
             setStaticField(aQCls, schema.collectedHeartsField, int.class, 0);
             setStaticField(aQCls, schema.upDaysField, long.class, 0L);
             setStaticField(aQCls, schema.startedTsField, long.class, System.currentTimeMillis());
+            sessionBaselineCoins = lastKnownCoins > 0 ? lastKnownCoins : -1;
 
             try {
                 Class<?> saveCls = cl.loadClass(schema.upThueSaveRmsClass);
@@ -2923,18 +3317,33 @@ public class AvatarModAdapter {
 
             boolean isThreadAlive = curThread != null && curThread.isAlive();
             if (!isThreadAlive) {
-                if (boolRunF != null) {
-                    boolRunF.setBoolean(null, false);
-                }
+                boolean started = false;
                 if (ctrlInst != null) {
                     try {
                         Method startM = taskCtrlCls.getMethod("for");
                         startM.invoke(ctrlInst);
-                    } catch (Throwable ignored) {
+                        started = true;
+                    } catch (Throwable t) {
+                        // bX.for() ném NPE nếu AngelChip.do chưa sẵn sàng
+                    }
+                }
+                // Fallback an toàn: Khởi chạy worker thread bX trực tiếp
+                if (!started || threadF == null || threadF.get(null) == null || !((Thread) threadF.get(null)).isAlive()) {
+                    if (boolRunF != null) {
+                        boolRunF.setBoolean(null, true);
+                    }
+                    if (ctrlInst instanceof Runnable) {
+                        Thread worker = new Thread((Runnable) ctrlInst, "ChipMix-WorkerThread");
+                        worker.setDaemon(true);
+                        worker.start();
+                        if (threadF != null) {
+                            threadF.set(null, worker);
+                        }
                     }
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable t) {
+            System.err.println("[TASK CONTROLLER ERR]: " + t.getMessage());
         }
     }
 
@@ -2954,7 +3363,8 @@ public class AvatarModAdapter {
                 c = c.getSuperclass();
             }
             if (c != null && !c.equals(Object.class)) {
-                // Đảm bảo hc.int:J là 100L (thời gian sleep giữa các vòng lặp bX.run()), tuyệt đối KHÔNG đặt System.currentTimeMillis()
+                // Đảm bảo hc.int:J là 100L (thời gian sleep giữa các vòng lặp bX.run()), tuyệt
+                // đối KHÔNG đặt System.currentTimeMillis()
                 try {
                     Field intF = c.getDeclaredField("int");
                     intF.setAccessible(true);
@@ -2962,7 +3372,8 @@ public class AvatarModAdapter {
                 } catch (Throwable ignored) {
                 }
 
-                // Cập nhật watchdog try:J và new:J để không bị ngắt kết nối do quá hạn 180s / 300s
+                // Cập nhật watchdog try:J và new:J để không bị ngắt kết nối do quá hạn 180s /
+                // 300s
                 long now = System.currentTimeMillis();
                 try {
                     Field tryF = c.getDeclaredField("try");
@@ -2993,13 +3404,15 @@ public class AvatarModAdapter {
         ClassLoader cl = getClassLoader();
         if (cl == null) {
             System.out.println("⚠️ [CHƯA VÀO GAME]: Giả lập đang khởi chạy, vui lòng đợi đăng nhập xong rồi bật Auto!");
-            System.out.println("[AUTO_STATUS]: {\"isRunning\":false,\"status\":\"warning\",\"message\":\"Đang khởi tạo giả lập game...\"}");
+            System.out.println(
+                    "[AUTO_STATUS]: {\"isRunning\":false,\"status\":\"warning\",\"message\":\"Đang khởi tạo giả lập game...\"}");
             return false;
         }
 
         AutoTaskInfo curTaskBefore = getActiveAutoTask();
         boolean isSubTask = false;
-        if (curTaskBefore != null && ("diamond".equalsIgnoreCase(curTaskBefore.autoType) || "fish".equalsIgnoreCase(curTaskBefore.autoType))) {
+        if (curTaskBefore != null && ("diamond".equalsIgnoreCase(curTaskBefore.autoType)
+                || "fish".equalsIgnoreCase(curTaskBefore.autoType))) {
             if ("farm".equalsIgnoreCase(autoType) || "nong_trai".equalsIgnoreCase(autoType)
                     || "sell_ore".equalsIgnoreCase(autoType) || "banda".equalsIgnoreCase(autoType)
                     || "stone".equalsIgnoreCase(autoType) || "bd".equalsIgnoreCase(autoType)) {
@@ -3024,40 +3437,57 @@ public class AvatarModAdapter {
             Object taskObj = null;
 
             if ("farm".equalsIgnoreCase(autoType)) {
-                if (schema.farmTraderTaskClassName != null && !schema.farmTraderTaskClassName.isEmpty()) {
-                    try {
-                        Class<?> farmCls = cl.loadClass(schema.farmClassName);
-                        Byte modeObj = (Byte) getStaticField(farmCls, schema.farmModeField, byte.class);
-                        byte mode = (modeObj != null) ? modeObj.byteValue() : 0;
-                        taskObj = (mode == 0) ? cl.loadClass(schema.farmTraderTaskClassName).newInstance()
-                                : farmCls.newInstance();
-                    } catch (Throwable t) {
+                // 1. Ưu tiên kích hoạt Auto Farm thông qua bX.if("fa") của Mod
+                boolean startedViaFa = false;
+                try {
+                    AutoTaskInfo active = getActiveAutoTask();
+                    if (active == null || !"farm".equalsIgnoreCase(active.autoType)) {
+                        Method ifM = taskCtrlCls.getMethod("if", String.class);
+                        ifM.invoke(null, "fa");
+                        ensureTaskControllerRunning(cl, schema);
+                        startedViaFa = true;
+                    }
+                } catch (Throwable ignored) {
+                }
+
+                if (!startedViaFa) {
+                    if (schema.farmTraderTaskClassName != null && !schema.farmTraderTaskClassName.isEmpty()) {
+                        try {
+                            Class<?> farmCls = cl.loadClass(schema.farmClassName);
+                            Byte modeObj = (Byte) getStaticField(farmCls, schema.farmModeField, byte.class);
+                            byte mode = (modeObj != null) ? modeObj.byteValue() : 0;
+                            taskObj = (mode == 0) ? cl.loadClass(schema.farmTraderTaskClassName).newInstance()
+                                    : farmCls.newInstance();
+                        } catch (Throwable t) {
+                            taskObj = cl.loadClass(schema.farmTaskClassName).newInstance();
+                        }
+                    } else {
                         taskObj = cl.loadClass(schema.farmTaskClassName).newInstance();
                     }
-                } else {
-                    taskObj = cl.loadClass(schema.farmTaskClassName).newInstance();
-                }
-                initHcWatchdog(taskObj, schema);
+                    initHcWatchdog(taskObj, schema);
 
-                if (isSubTask && curTaskBefore != null && curTaskBefore.taskInstance != null) {
-                    try {
-                        Method subDoMethod = taskCtrlCls.getMethod(schema.taskStartMethod, taskArgCls, taskArgCls);
-                        subDoMethod.invoke(null, taskObj, curTaskBefore.taskInstance);
-                        ensureTaskControllerRunning(cl, schema);
-                        lastConfiguredAutoType = autoType;
-                        System.out.println("🌾 [BẬT AUTO FARM]: Tạm chuyển sang Auto Farm (từ " + curTaskBefore.friendlyName + ")!");
-                        System.out.println(
-                                "[AUTO_STATUS]: {\"isRunning\":true,\"autoType\":\"farm\",\"parentAutoType\":\"" + curTaskBefore.autoType + "\",\"subTask\":true,\"status\":\"running\",\"message\":\"Đang về chăm farm (từ " + curTaskBefore.friendlyName + ")...\"}");
-                        return true;
-                    } catch (Throwable ignored) {
+                    if (isSubTask && curTaskBefore != null && curTaskBefore.taskInstance != null) {
+                        try {
+                            Method subDoMethod = taskCtrlCls.getMethod(schema.taskStartMethod, taskArgCls, taskArgCls);
+                            subDoMethod.invoke(null, taskObj, curTaskBefore.taskInstance);
+                            ensureTaskControllerRunning(cl, schema);
+                            lastConfiguredAutoType = autoType;
+                            System.out.println(
+                                    "[AUTO_STATUS]: {\"isRunning\":true,\"autoType\":\"farm\",\"parentAutoType\":\"" + curTaskBefore.autoType + "\",\"subTask\":true,\"status\":\"running\",\"message\":\"Đang về chăm farm (từ " + curTaskBefore.friendlyName + ")...\"}");
+                            return true;
+                        } catch (Throwable ignored) {
+                        }
                     }
+
+                    Method doMethod = taskCtrlCls.getMethod(schema.taskStartMethod, taskArgCls);
+                    doMethod.invoke(null, taskObj);
+                    ensureTaskControllerRunning(cl, schema);
                 }
 
-                Method doMethod = taskCtrlCls.getMethod(schema.taskStartMethod, taskArgCls);
-                doMethod.invoke(null, taskObj);
-                ensureTaskControllerRunning(cl, schema);
+                // 2. Chuyển map vào Nông Trại (Map 25) bằng chức năng của Game Mod (không log nếu đã ở sẵn map 25)
+                fastSwitchMap(25, false);
+
                 lastConfiguredAutoType = autoType;
-                System.out.println("🌾 [BẬT AUTO FARM]: Đã kích hoạt Auto Farm [" + schema.name + "]!");
                 System.out.println(
                         "[AUTO_STATUS]: {\"isRunning\":true,\"autoType\":\"farm\",\"status\":\"running\",\"message\":\"Đang chạy Auto Farm...\"}");
                 return true;
@@ -3093,13 +3523,16 @@ public class AvatarModAdapter {
                     } catch (Throwable ignored) {
                     }
 
-                    // 2. Đảm bảo worker thread Runnable (bX.run()) được khởi chạy trước khi cài đặt mốc thời gian
+                    // 2. Đảm bảo worker thread Runnable (bX.run()) được khởi chạy trước khi cài đặt
+                    // mốc thời gian
                     ensureTaskControllerRunning(cl, schema);
 
-                    // 3. Khởi tạo watchdog của hc (đặt int:J = 100L tránh treo 54 năm, đặt try/new = now)
+                    // 3. Khởi tạo watchdog của hc (đặt int:J = 100L tránh treo 54 năm, đặt try/new
+                    // = now)
                     initHcWatchdog(taskObj, schema);
 
-                    // 4. Đặt thời gian hẹn giờ về farm (soXu = now + intervalMs) để không bị lập tức nhảy về nông trại
+                    // 4. Đặt thời gian hẹn giờ về farm (soXu = now + intervalMs) để không bị lập
+                    // tức nhảy về nông trại
                     long intervalMs = 60 * 60000L;
                     try {
                         Integer minsObj = (Integer) getStaticField(diamCls, schema.diamondIntervalField, int.class);
@@ -3149,7 +3582,6 @@ public class AvatarModAdapter {
                     ensureTaskControllerRunning(cl, schema);
                 }
 
-                System.out.println("💎 [BẬT AUTO KIM CƯƠNG]: Đã kích hoạt Auto Đào Kim Cương [" + schema.name + "]!");
                 System.out.println(
                         "[AUTO_STATUS]: {\"isRunning\":true,\"autoType\":\"diamond\",\"status\":\"running\",\"message\":\"Đang chạy Auto Đào Kim Cương...\"}");
                 return true;
@@ -3185,10 +3617,12 @@ public class AvatarModAdapter {
                         } catch (Throwable ignored) {
                         }
 
-                        // 2. Đảm bảo background worker thread đang chạy trước khi cấu hình mốc thời gian
+                        // 2. Đảm bảo background worker thread đang chạy trước khi cấu hình mốc thời
+                        // gian
                         ensureTaskControllerRunning(cl, schema);
 
-                        // 3. Khởi tạo watchdog của hc (đặt int:J = 100L tránh treo 54 năm, đặt try/new = now)
+                        // 3. Khởi tạo watchdog của hc (đặt int:J = 100L tránh treo 54 năm, đặt try/new
+                        // = now)
                         initHcWatchdog(taskObj, schema);
 
                         // 4. Khởi tạo thời gian về farm
@@ -3219,7 +3653,8 @@ public class AvatarModAdapter {
                         } catch (Throwable ignored) {
                         }
 
-                        boolean isChipMix = (schema == ModSchema.CHIP_MIX || "Bản ChipMix Full (build13)".equals(schema.name));
+                        boolean isChipMix = (schema == ModSchema.CHIP_MIX
+                                || "Bản ChipMix Full (build13)".equals(schema.name));
                         if (isChipMix) {
                             setField(taskObj, "if", intervalMs, long.class);
                         } else {
@@ -3248,15 +3683,12 @@ public class AvatarModAdapter {
                         // 6. Đảm bảo worker thread tiếp tục chạy
                         ensureTaskControllerRunning(cl, schema);
 
-                        System.out.println("🎣 [BẬT AUTO FISH]: Đã kích hoạt Auto Câu Cá [" + schema.name
-                                + "] (Hẹn về farm: " + (intervalMs / 60000) + " phút)!");
                         System.out.println(
                                 "[AUTO_STATUS]: {\"isRunning\":true,\"autoType\":\"fish\",\"status\":\"running\",\"message\":\"Đang chạy Auto Câu Cá...\"}");
                         return true;
                     }
                 } else {
-                    System.out.println("⚠️ [KHÔNG HỖ TRỢ]: Bản mod đang chạy [" + schema.name
-                            + "] không có Auto Câu Cá. Vui lòng đổi sang [avatar_fish_build40.jar] trong Quản Lý File!");
+                    System.out.println("⚠️ [KHÔNG HỖ TRỢ]: Bản mod đang chạy không có Auto Câu Cá. Vui lòng đổi sang [avatar_fish_build40.jar] trong Quản Lý File!");
                     System.out.println(
                             "[AUTO_STATUS]: {\"isRunning\":false,\"status\":\"error\",\"message\":\"Bản mod hiện tại không hỗ trợ Auto Câu Cá. Hãy chọn file avatar_fish_build40.jar!\"}");
                     return false;
@@ -3275,9 +3707,11 @@ public class AvatarModAdapter {
                             subDoMethod.invoke(null, taskObj, curTaskBefore.taskInstance);
                             ensureTaskControllerRunning(cl, schema);
                             lastConfiguredAutoType = autoType;
-                            System.out.println("🪨 [BẬT AUTO BÁN ĐÁ]: Tạm chuyển sang Auto Bán Đá (từ " + curTaskBefore.friendlyName + ")!");
                             System.out.println(
-                                    "[AUTO_STATUS]: {\"isRunning\":true,\"autoType\":\"sell_ore\",\"parentAutoType\":\"" + curTaskBefore.autoType + "\",\"subTask\":true,\"status\":\"running\",\"message\":\"Đang đi bán đá (từ " + curTaskBefore.friendlyName + ")...\"}");
+                                    "[AUTO_STATUS]: {\"isRunning\":true,\"autoType\":\"sell_ore\",\"parentAutoType\":\""
+                                            + curTaskBefore.autoType
+                                            + "\",\"subTask\":true,\"status\":\"running\",\"message\":\"Đang đi bán đá (từ "
+                                            + curTaskBefore.friendlyName + ")...\"}");
                             return true;
                         } catch (Throwable ignored) {
                         }
@@ -3287,7 +3721,6 @@ public class AvatarModAdapter {
                     doMethod.invoke(null, taskObj);
                     ensureTaskControllerRunning(cl, schema);
                     lastConfiguredAutoType = autoType;
-                    System.out.println("🪨 [BẬT AUTO BÁN ĐÁ]: Đã kích hoạt Auto Bán Đá [" + schema.name + "]!");
                     System.out.println(
                             "[AUTO_STATUS]: {\"isRunning\":true,\"autoType\":\"sell_ore\",\"status\":\"running\",\"message\":\"Đang chạy Auto Bán Đá...\"}");
                     return true;
@@ -3297,7 +3730,6 @@ public class AvatarModAdapter {
                     Class<?> skCls = cl.loadClass("SkRunner");
                     Method bootM = skCls.getMethod("boot");
                     bootM.invoke(null);
-                    System.out.println("🎉 [BẬT AUTO SỰ KIỆN]: Đã kích hoạt Auto Sự Kiện (SkRunner) [" + schema.name + "]!");
                     System.out.println(
                             "[AUTO_STATUS]: {\"isRunning\":true,\"autoType\":\"event\",\"status\":\"running\",\"message\":\"Đang chạy Auto Sự Kiện...\"}");
                     return true;
@@ -3309,7 +3741,6 @@ public class AvatarModAdapter {
                     Class<?> lichCls = cl.loadClass("LichRunner");
                     Method bootM = lichCls.getMethod("boot");
                     bootM.invoke(null);
-                    System.out.println("⏰ [BẬT AUTO LỊCH]: Đã kích hoạt Auto Hẹn Giờ Theo Lịch (LichRunner) [" + schema.name + "]!");
                     System.out.println(
                             "[AUTO_STATUS]: {\"isRunning\":true,\"autoType\":\"lich\",\"status\":\"running\",\"message\":\"Đang chạy Auto Theo Lịch...\"}");
                     return true;
@@ -3320,8 +3751,10 @@ public class AvatarModAdapter {
         } catch (Throwable t) {
             System.err.println("[START_AUTO ERR]: " + t.getMessage());
             t.printStackTrace();
-            System.out.println("❌ [LỖI BẬT AUTO]: Không thể khởi chạy " + autoType + " (" + (t.getMessage() != null ? t.getMessage() : t.getClass().getSimpleName()) + ")!");
-            System.out.println("[AUTO_STATUS]: {\"isRunning\":false,\"status\":\"error\",\"message\":\"Lỗi khởi chạy " + autoType + "\"}");
+            System.out.println("❌ [LỖI BẬT AUTO]: Không thể khởi chạy " + autoType + " ("
+                    + (t.getMessage() != null ? t.getMessage() : t.getClass().getSimpleName()) + ")!");
+            System.out.println("[AUTO_STATUS]: {\"isRunning\":false,\"status\":\"error\",\"message\":\"Lỗi khởi chạy "
+                    + autoType + "\"}");
         }
 
         return false;
@@ -3343,7 +3776,8 @@ public class AvatarModAdapter {
         ModSchema schema = getCurrentSchema();
         AutoTaskInfo curTask = getActiveAutoTask();
 
-        // 1. Nếu đang có Subtask chạy (isSubTask == true) và người dùng yêu cầu dừng subtask:
+        // 1. Nếu đang có Subtask chạy (isSubTask == true) và người dùng yêu cầu dừng
+        // subtask:
         boolean shouldReturnToParent = false;
         if (curTask != null && curTask.isSubTask && curTask.parentAutoType != null) {
             if (targetType == null || targetType.equalsIgnoreCase(curTask.autoType)
@@ -3362,8 +3796,11 @@ public class AvatarModAdapter {
                 returnMethod.invoke(null);
                 lastConfiguredAutoType = curTask.parentAutoType;
                 if (!silent) {
-                    System.out.println("⏹️ [QUAY VỀ AUTO CHÍNH]: Đã dừng subtask (" + curTask.friendlyName + ") và quay về " + curTask.parentAutoType + "!");
-                    System.out.println("[AUTO_STATUS]: {\"isRunning\":true,\"status\":\"running\",\"autoType\":\"" + curTask.parentAutoType + "\",\"subTask\":false,\"message\":\"Đang chạy tiếp " + curTask.parentAutoType + "...\"}");
+                    System.out.println("⏹️ [QUAY VỀ AUTO CHÍNH]: Đã dừng subtask (" + curTask.friendlyName
+                            + ") và quay về " + curTask.parentAutoType + "!");
+                    System.out.println("[AUTO_STATUS]: {\"isRunning\":true,\"status\":\"running\",\"autoType\":\""
+                            + curTask.parentAutoType + "\",\"subTask\":false,\"message\":\"Đang chạy tiếp "
+                            + curTask.parentAutoType + "...\"}");
                 }
                 return;
             } catch (Throwable ignored) {
@@ -3404,7 +3841,8 @@ public class AvatarModAdapter {
 
         if (!silent) {
             System.out.println("⏹️ [DỪNG AUTO]: Đã dừng tiến trình Auto.");
-            System.out.println("[AUTO_STATUS]: {\"isRunning\":false,\"status\":\"stopped\",\"message\":\"Đã dừng Auto\"}");
+            System.out.println(
+                    "[AUTO_STATUS]: {\"isRunning\":false,\"status\":\"stopped\",\"message\":\"Đã dừng Auto\"}");
         }
     }
 
@@ -3436,9 +3874,10 @@ public class AvatarModAdapter {
                                     || "bt".equals(clsName)) {
                                 friendly = "Auto Farm (Nông trại)";
                                 type = "farm";
-                            } else if (schema.farmTraderTaskClassName != null && !schema.farmTraderTaskClassName.isEmpty()
+                            } else if (schema.farmTraderTaskClassName != null
+                                    && !schema.farmTraderTaskClassName.isEmpty()
                                     && (clsName.equals(schema.farmTraderTaskClassName) || "AutoLaiBuon".equals(clsName)
-                                    || "hn".equals(clsName))) {
+                                            || "hn".equals(clsName))) {
                                 friendly = "Auto Farm (Lái buôn hỗ trợ)";
                                 type = "farm";
                             } else if (clsName.equals(schema.diamondTaskClassName) || "AutoKimCuong".equals(clsName)
@@ -3497,7 +3936,8 @@ public class AvatarModAdapter {
                                                 String pName = parentObj.getClass().getSimpleName();
                                                 if (pName.equals(schema.diamondTaskClassName)
                                                         || "AutoKimCuong".equals(pName) || "X".equals(pName)
-                                                        || "aj".equals(pName) || "al".equals(pName) || "dy".equals(pName)) {
+                                                        || "aj".equals(pName) || "al".equals(pName)
+                                                        || "dy".equals(pName)) {
                                                     parentType = "diamond";
                                                     isSub = true;
                                                     break;
@@ -3508,7 +3948,8 @@ public class AvatarModAdapter {
                                                     break;
                                                 } else if (pName.equals(schema.farmTaskClassName)
                                                         || "AutoFarm".equals(pName) || "aC".equals(pName)
-                                                        || "bq".equals(pName) || "bt".equals(pName) || "hp".equals(pName)
+                                                        || "bq".equals(pName) || "bt".equals(pName)
+                                                        || "hp".equals(pName)
                                                         || "hn".equals(pName)) {
                                                     parentType = "farm";
                                                     isSub = true;
@@ -3698,7 +4139,8 @@ public class AvatarModAdapter {
 
     /**
      * Bắt tin nhắn sự kiện từ Tab chat riêng của Admin / Server
-     * Bao gồm: er.class (ChipMix Full build13) và các bảng băm chat (j, k, p, g trên các bản khác)
+     * Bao gồm: er.class (ChipMix Full build13) và các bảng băm chat (j, k, p, g
+     * trên các bản khác)
      */
     public static String checkAdminChatMessage() {
         ClassLoader cl = getClassLoader();
@@ -3714,7 +4156,8 @@ public class AvatarModAdapter {
                     Object erInst = f.get(null);
                     if (erInst != null) {
                         for (Field tf : erInst.getClass().getDeclaredFields()) {
-                            if (!java.lang.reflect.Modifier.isStatic(tf.getModifiers()) && java.util.Vector.class.isAssignableFrom(tf.getType())) {
+                            if (!java.lang.reflect.Modifier.isStatic(tf.getModifiers())
+                                    && java.util.Vector.class.isAssignableFrom(tf.getType())) {
                                 tf.setAccessible(true);
                                 java.util.Vector<?> tabs = (java.util.Vector<?>) tf.get(erInst);
                                 if (tabs != null) {
@@ -3734,13 +4177,17 @@ public class AvatarModAdapter {
                                                     lines = (java.util.Vector<?>) tabF.get(tabObj);
                                                 }
                                             }
-                                            if (tabName != null && ("admin".equalsIgnoreCase(tabName) || "server".equalsIgnoreCase(tabName) || "hệ thống".equalsIgnoreCase(tabName))) {
+                                            if (tabName != null && ("admin".equalsIgnoreCase(tabName)
+                                                    || "server".equalsIgnoreCase(tabName)
+                                                    || "hệ thống".equalsIgnoreCase(tabName))) {
                                                 if (lines != null && !lines.isEmpty()) {
-                                                    for (int l = lines.size() - 1; l >= Math.max(0, lines.size() - 5); l--) {
+                                                    for (int l = lines.size() - 1; l >= Math.max(0,
+                                                            lines.size() - 5); l--) {
                                                         Object lineObj = lines.elementAt(l);
                                                         if (lineObj instanceof String) {
                                                             String lStr = (String) lineObj;
-                                                            if (lStr.contains("Chúc mừng") || lStr.contains("nhận được") || lStr.contains("FISH:")) {
+                                                            if (lStr.contains("Chúc mừng") || lStr.contains("nhận được")
+                                                                    || lStr.contains("FISH:")) {
                                                                 return lStr.trim();
                                                             }
                                                         }
@@ -3778,7 +4225,8 @@ public class AvatarModAdapter {
                                                         && !java.lang.reflect.Modifier.isStatic(tf.getModifiers())) {
                                                     tf.setAccessible(true);
                                                     String s = (String) tf.get(tabObj);
-                                                    if (s != null && (s.contains("Chúc mừng") || s.contains("nhận được") || s.contains("FISH:"))) {
+                                                    if (s != null && (s.contains("Chúc mừng") || s.contains("nhận được")
+                                                            || s.contains("FISH:"))) {
                                                         return s.trim();
                                                     }
                                                 }
